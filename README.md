@@ -20,8 +20,8 @@ Este projeto usa os mesmos nomes de arquivo observados no código do Itemzflow, 
 - [Itemzflow - função usbpath](https://github.com/LightningMods/Itemzflow/blob/main/itemzflow/source/utils.cpp)
 
 ## Versões
-- v0.1: scanner read-only, lista de CUSA e vínculos, relatório.
-- v0.2 planejada: correção transacional com confirmação e restauração; executar jogo pela API do PS4.
+- v0.3: interface e scanner read-only, lista de CUSA e vínculos, relatório.
+- v0.4 planejada: correção transacional com confirmação e restauração; executar jogo pela API do PS4.
 
 ## Desenvolvimento
 Compilação por OpenOrbis SDK 0.5.4, usando `make` ou GitHub Actions. O pacote precisa ser testado no PS4 real antes que seja considerado compatível.
