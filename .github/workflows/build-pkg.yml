@@ -58,6 +58,8 @@ jobs:
           /tmp/usbfix-fixer-test
           g++ -std=c++11 -Wall -Wextra -Werror tests/catalog_test.cpp source/catalog.cpp -o /tmp/usbfix-catalog-test
           /tmp/usbfix-catalog-test
+          g++ -std=c++11 -Wall -Wextra -Werror -DUSB_FIXER_PS4 tests/ps4_fixer_mock_test.cpp source/fixer_ps4.cpp -o /tmp/usbfix-ps4-native-safety
+          /tmp/usbfix-ps4-native-safety
 
       - name: Compile USB Link Fixer
         run: |
