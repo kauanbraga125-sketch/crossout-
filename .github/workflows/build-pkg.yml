@@ -38,13 +38,15 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends clang-18 lld-18
 
-      - name: Fetch public icon
+      - name: Generate custom 512x512 RGB menu icon
         run: |
           set -euxo pipefail
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git .sample-src
-          git -C .sample-src sparse-checkout set samples/trophies/sce_sys
+          sudo apt-get install -y --no-install-recommends imagemagick
           mkdir -p sce_sys
-          cp .sample-src/samples/trophies/sce_sys/icon0.png sce_sys/icon0.png
+          base64 --decode assets/icon-cover.jpg.base64 > /tmp/usbfix-cover.jpg
+          identify /tmp/usbfix-cover.jpg
+          convert /tmp/usbfix-cover.jpg -resize 512x512! -strip -alpha off -type TrueColor PNG24:sce_sys/icon0.png
+          identify -format "%m %wx%h %[channels]\\n" sce_sys/icon0.png
           test -s sce_sys/icon0.png
 
       - name: Run host-side Itemzflow compatibility tests
