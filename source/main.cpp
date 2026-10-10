@@ -14,6 +14,7 @@
 #include <string>
 
 #include "font8x8_basic.h"
+#include "path_match.h"
 
 // PS4 USB Link Fixer 0.2 - read-only interactive safety preflight.
 // This build DOES NOT delete, move, overwrite, reinstall or change game links.
@@ -91,7 +92,7 @@ static Link inspect(const std::string& id,const char* local,const char* ext){
   bool recognized=false;
   for(int i=0;i<8;i++){
     std::string p=usb(id,ext,i);
-    if(x.old_target==p)recognized=true;
+    if(usbfix_same_path(x.old_target.c_str(), p.c_str()))recognized=true;
     if(regular_nonempty(p)){x.copies++;x.proposed=p;}
   }
   if(!recognized){x.state=FOREIGN_LINK;return x;}
