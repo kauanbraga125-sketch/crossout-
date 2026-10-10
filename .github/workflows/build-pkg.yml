@@ -1,0 +1,90 @@
+name: Build PS4 USB Link Fixer PKG
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download OpenOrbis v0.5.4 SDK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          SDK_URL=$(gh api repos/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/tags/v0.5.4 \
+            --jq '.assets[] | select(.name == "toolchain-llvm-18.tar.gz") | .browser_download_url')
+          test -n "$SDK_URL"
+          curl --fail --location --retry 3 "$SDK_URL" --output openorbis-sdk.tar.gz
+          mkdir -p .openorbis-sdk
+          tar -xzf openorbis-sdk.tar.gz -C .openorbis-sdk
+          LINK_X=$(find "$GITHUB_WORKSPACE/.openorbis-sdk" -type f -name link.x -print -quit)
+          test -n "$LINK_X"
+          TOOLCHAIN_ROOT=$(dirname "$LINK_X")
+          chmod +x "$TOOLCHAIN_ROOT/bin/linux/"*
+          echo "TOOLCHAIN_ROOT=$TOOLCHAIN_ROOT" >> "$GITHUB_ENV"
+
+      - name: Install compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-18 lld-18
+
+      - name: Fetch public icon
+        run: |
+          set -euxo pipefail
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain.git .sample-src
+          git -C .sample-src sparse-checkout set samples/trophies/sce_sys
+          mkdir -p sce_sys
+          cp .sample-src/samples/trophies/sce_sys/icon0.png sce_sys/icon0.png
+          test -s sce_sys/icon0.png
+
+      - name: Compile USB Link Fixer
+        run: |
+          set -euxo pipefail
+          export OO_PS4_TOOLCHAIN="$TOOLCHAIN_ROOT"
+          make CCX=clang++-18 LD=ld.lld-18 eboot.bin
+          test -s eboot.bin
+
+      - name: Build PKG
+        run: |
+          set -euxo pipefail
+          chmod -R a+rwX "$GITHUB_WORKSPACE"
+          docker run --rm --user 0:0 \
+            --env OO_PS4_TOOLCHAIN=/opt/openorbis \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --volume "$TOOLCHAIN_ROOT:/opt/openorbis" \
+            --workdir /work \
+            ubuntu:20.04 \
+            bash -lc '
+              set -euxo pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y --no-install-recommends make libicu66 libssl1.1 ca-certificates
+              make pkg.gp4
+              /opt/openorbis/bin/linux/PkgTool.Core pkg_build pkg.gp4 .
+            '
+          test -s IV0000-ULFX00001_00-USBLinkFixer0001.pkg
+
+      - name: Name artifact
+        run: |
+          set -euxo pipefail
+          cp IV0000-ULFX00001_00-USBLinkFixer0001.pkg PS4-USB-Link-Fixer.pkg
+          sha256sum PS4-USB-Link-Fixer.pkg > PS4-USB-Link-Fixer.pkg.sha256
+
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PS4-USB-Link-Fixer-PS4
+          path: |
+            PS4-USB-Link-Fixer.pkg
+            PS4-USB-Link-Fixer.pkg.sha256
+          if-no-files-found: error
