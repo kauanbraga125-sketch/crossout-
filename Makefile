@@ -1,7 +1,7 @@
 TITLE := PS4 USB Link Fixer
 VERSION := 05.00
 TITLE_ID := ULFX00001
-CONTENT_ID := IV0000-ULFX00001_00-USBLinkFixer0001
+CONTENT_ID := IV0000-ULFX00001_00-USBLINKFIXER0001
 LIBS := -lc -lkernel -lc++ -lSDL2 -lSceVideoOut -lSceAudioOut -lScePad -lSceUserService -lSceSysmodule -lSceSystemService
 TOOLCHAIN := $(OO_PS4_TOOLCHAIN)
 PROJDIR := source
