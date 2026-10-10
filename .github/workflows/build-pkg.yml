@@ -74,6 +74,11 @@ jobs:
             '
           test -s IV0000-ULFX00001_00-USBLinkFixer0001.pkg
 
+      - name: Validate PKG before publishing
+        run: |
+          set -euxo pipefail
+          python3 tools/validate_pkg.py IV0000-ULFX00001_00-USBLinkFixer0001.pkg
+
       - name: Name artifact
         run: |
           set -euxo pipefail
