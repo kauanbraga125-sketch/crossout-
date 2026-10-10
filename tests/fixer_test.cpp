@@ -30,7 +30,9 @@ static void make_usb(const std::string& root,const char* device,const char* id,
 }
 static std::string read_target(const std::string& file){
  char data[1024];ssize_t n=readlink(file.c_str(),data,sizeof(data)-1);
- if(n<0)return "";data[n]=0;return std::string(data);
+ if(n<0)return "";
+ data[n]=0;
+ return std::string(data);
 }
 int main(){
  char path[]="/tmp/usbfix-fulltest-XXXXXX";
