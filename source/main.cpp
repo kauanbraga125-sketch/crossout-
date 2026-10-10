@@ -16,7 +16,7 @@
 #include "font8x8_basic.h"
 #include "path_match.h"
 
-// PS4 USB Link Fixer 0.2 - read-only interactive safety preflight.
+// PS4 USB Link Fixer 0.3 - read-only interactive safety preflight.
 // This build DOES NOT delete, move, overwrite, reinstall or change game links.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
@@ -251,9 +251,9 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.2: READ ONLY, no changes to games or links.");
+  logline("USB Link Fixer v0.3: READ ONLY, no changes to games or links.");
   scan();
-  notify("USB Link Fixer 0.2: diagnostico concluido, sem alterar arquivos.");
+  notify("USB Link Fixer 0.3: diagnostico concluido, sem alterar arquivos.");
   if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)!=0){
     logline("SDL init failed: %s",SDL_GetError());
     notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
