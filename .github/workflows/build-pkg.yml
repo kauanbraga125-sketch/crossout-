@@ -56,6 +56,8 @@ jobs:
           /tmp/usbfix-path-test
           g++ -std=c++11 -Wall -Wextra -Werror tests/fixer_test.cpp source/fixer.cpp -o /tmp/usbfix-fixer-test
           /tmp/usbfix-fixer-test
+          g++ -std=c++11 -Wall -Wextra -Werror tests/catalog_test.cpp source/catalog.cpp -o /tmp/usbfix-catalog-test
+          /tmp/usbfix-catalog-test
 
       - name: Compile USB Link Fixer
         run: |
