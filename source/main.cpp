@@ -282,7 +282,7 @@ static void draw(SDL_Renderer* r){
       label(r,95,259+(int)i*31,shorten(repairResult[i],125),1,
             i==1?C(255,218,161):C(226,236,245),124);
     }
-    label(r,95,572,"X OU BOLA: FECHAR O RELATORIO",2,C(132,226,238),80);
+    label(r,95,572,"BOLA: FECHAR RELATORIO (X NAO FECHA)",2,C(132,226,238),80);
   }
   fill(r,0,654,W,66,C(22,36,55));
   label(r,40,663,"CIMA/BAIXO: selecionar | X: detalhes/confirmar | O: voltar",1,C(207,222,237),90);
@@ -371,7 +371,7 @@ static bool has_candidates(){
 }
 static void handle(int code,bool& running){
  if(resultVisible){
-   if(code==3 || code==5)resultVisible=false;
+   if(code==5)resultVisible=false;
    return;
  }
  if(confirmation){
