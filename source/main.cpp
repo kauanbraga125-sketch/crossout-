@@ -21,7 +21,7 @@
 #include "native_catalog.h"
 #include "ps4_link_io.h"
 
-// PS4 USB Link Fixer 0.9: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 1.0: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -45,6 +45,11 @@ std::string message="Analisando os HDs...";
 int selected=0;
 bool details=false;
 int confirmation=0; // 0 none, 1 repair, 2 repair+launch
+bool resultVisible=false;
+std::vector<std::string> repairResult;
+static const char* typeLabel(int type){
+  return type==0?"JOGO":type==1?"ATUALIZACAO":"DLC";
+}
 FILE* logFile=nullptr;
 int usbCount=0;
 CatalogSummary catalogInfo;
@@ -136,7 +141,7 @@ static std::string read_title(const std::string& id){
   return id;
 }
 static void scan(){
-  games.clear();usbCount=0;selected=0;details=false;confirmation=0;
+  games.clear();usbCount=0;selected=0;details=false;confirmation=0;resultVisible=false;repairResult.clear();
   std::vector<CatalogItem> entries;
   usbfix_collect_games("",&entries,&catalogInfo);
   int usbGames=0;
@@ -218,7 +223,7 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.9 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
+  label(r,49,75,"v1.0 - REPARO COM RELATORIO DE ERROS",1,C(194,214,237));
   label(r,50,117,message,2,C(211,222,241),66);
   label(r,50,156,catalogStatus,1,C(244,196,125),130);
   label(r,50,179,goldhenStatus,1,C(134,224,244),135);
@@ -269,6 +274,16 @@ static void draw(SDL_Renderer* r){
     label(r,203,380,shorten(games[selected].name,42),2,C(220,222,240),42);
     label(r,203,443,"X: confirmar    O: cancelar",2,C(255,185,92),55);
   }
+  if(resultVisible){
+    fill(r,70,185,1140,430,C(24,43,59));
+    fill(r,70,185,1140,8,C(105,202,228));
+    label(r,95,208,"RELATORIO DO REPARO - VERIFICACAO REAL",2,C(235,250,255),49);
+    for(size_t i=0;i<repairResult.size() && i<10;i++){
+      label(r,95,259+(int)i*31,shorten(repairResult[i],125),1,
+            i==1?C(255,218,161):C(226,236,245),124);
+    }
+    label(r,95,572,"X OU BOLA: FECHAR O RELATORIO",2,C(132,226,238),80);
+  }
   fill(r,0,654,W,66,C(22,36,55));
   label(r,40,663,"CIMA/BAIXO: selecionar | X: detalhes/confirmar | O: voltar",1,C(207,222,237),90);
   label(r,40,683,"QUADRADO: reparar | R1: executar | TRIANGULO: acesso GoldHEN",1,C(207,222,237),90);
@@ -298,30 +313,55 @@ static bool launch_current(){
 }
 static void repair_selected(bool then_launch){
  if(games.empty())return;
- std::string tid=games[selected].id;
- int fixed=0;bool failed=false;
+ const std::string tid=games[selected].id;
+ repairResult.clear();
+ repairResult.push_back("CUSA: "+tid+" - "+games[selected].name);
+ int fixed=0,failed=0,untouched=0;
  for(int i=0;i<3;i++){
-   FixType type=(FixType)i;
-   FixLink before=fix_inspect("",tid,type);
+   const FixType type=(FixType)i;
+   const FixLink before=fix_inspect("",tid,type);
+   char code[38];snprintf(code,sizeof(code)," [errno=%d]",before.errno_value);
    if(before.status==FIX_CANDIDATE){
      std::string report;
-     if(fix_repair("",tid,type,&report,logFile))fixed++;
-     else failed=true;
-     logline("REPAIR %s type=%d: %s",tid.c_str(),i,report.c_str());
-     message=report;
+     const bool ok=fix_repair("",tid,type,&report,logFile);
+     if(ok)fixed++;else failed++;
+     repairResult.push_back(std::string(typeLabel(i))+": "+report);
+     logline("REPAIR %s type=%d old=[%s] new=[%s] ok=%d err=%d reason=%s",
+       tid.c_str(),i,before.old_target.c_str(),before.new_target.c_str(),
+       (int)ok,before.errno_value,report.c_str());
+   }else{
+     untouched++;
+     repairResult.push_back(std::string(typeLabel(i))+": NENHUMA ALTERACAO - "+
+                         fix_status(before.status)+code);
+     logline("REPAIR SKIP %s type=%d state=%s errno=%d",tid.c_str(),i,
+          fix_status(before.status),before.errno_value);
    }
  }
- // Refresh the selected game's link statuses without losing current list position.
+ // Re-read only the selected game's links: do not lose which game was selected.
  Game& g=games[selected];
  g.app=inspect(g.id,"app.pkg","app.pkg");
  g.patch=inspect(g.id,"patch.pkg","app_patch.pkg");
  g.dlc=inspect(g.id,"ac.pkg","app_dlc.pkg");
- char buf[200];
- snprintf(buf,sizeof(buf),"Resultado %s: %d links reparados; %s",
-    tid.c_str(),fixed,failed?"consulte /data/USBLinkFixer/scan.txt":"verifique jogo");
- message=buf;logline("%s",buf);
- if(then_launch && !failed)launch_current();
+ char summary[190];
+ snprintf(summary,sizeof(summary),
+          "FINAL: %d reparado(s), %d falha(s), %d sem alteracao",
+          fixed,failed,untouched);
+ repairResult.insert(repairResult.begin()+1,summary);
+ repairResult.push_back("DEPOIS: JOGO="+std::string(fix_status((FixState)g.app.state))+
+   " errno="+std::to_string(g.app.err));
+ repairResult.push_back("BACKUP: /data/USBLinkFixer/ (quando criado)");
+ repairResult.push_back("USB0 preservado; nenhum arquivo PKG foi movido.");
+ repairResult.push_back("Se falhou, envie uma foto deste relatorio.");
+ message=std::string(summary)+" | "+tid;
+ logline("%s",message.c_str());
+ resultVisible=true;
+ // Never auto-launch after a failed or unverified attempt.
+ if(then_launch && fixed>0 && failed==0 && g.app.state==VALID_LINK){
+   // Require explicit R1 separately instead; no auto-run during diagnosis.
+   repairResult.push_back("Abra o jogo separadamente apos conferir o resultado.");
+ }
 }
+
 static bool has_candidates(){
  if(games.empty())return false;
  const std::string& id=games[selected].id;
@@ -330,6 +370,10 @@ static bool has_candidates(){
         fix_inspect("",id,FIX_DLC).status==FIX_CANDIDATE;
 }
 static void handle(int code,bool& running){
+ if(resultVisible){
+   if(code==3 || code==5)resultVisible=false;
+   return;
+ }
  if(confirmation){
    if(code==3){int mode=confirmation;confirmation=0;repair_selected(mode==2);}
    else if(code==5)confirmation=0;
@@ -373,7 +417,7 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.9: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v1.0: confirmation-required repair, no PKG movement.");
   usbfix_io::set_authorized(false);
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
