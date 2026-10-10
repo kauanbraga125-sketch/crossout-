@@ -4,10 +4,15 @@
 This is a static preflight, NOT proof the package will launch on real PS4 hardware.
 """
 from pathlib import Path
+import re
 import struct
 import sys
 
-EXPECTED_CONTENT_ID = "IV0000-ULFX00001_00-USBLinkFixer0001"
+EXPECTED_CONTENT_ID = "IV0000-ULFX00001_00-USBLINKFIXER0001"
+CONTENT_ID_PATTERN = re.compile(r"[A-Z]{2}[0-9]{4}-[A-Z0-9]{4}[0-9]{5}_[0-9]{2}-[A-Z0-9]{16}")
+if not CONTENT_ID_PATTERN.fullmatch(EXPECTED_CONTENT_ID):
+    raise SystemExit("FAIL: content ID format must use uppercase alphanumeric fields")
+
 pkg = Path(sys.argv[1] if len(sys.argv)>1 else f"{EXPECTED_CONTENT_ID}.pkg")
 if not pkg.is_file():
     raise SystemExit(f"FAIL: missing PKG {pkg}")
@@ -19,6 +24,8 @@ with pkg.open("rb") as file:
 if header[:4] != b"\x7fCNT":
     raise SystemExit(f"FAIL: invalid PS4 PKG header: {header[:4].hex()}")
 content_id = header[0x40:0x64].split(b"\0", 1)[0].decode("ascii", "replace")
+if not CONTENT_ID_PATTERN.fullmatch(content_id):
+    raise SystemExit("FAIL: package header Content ID has invalid PS4 format")
 if content_id != EXPECTED_CONTENT_ID:
     raise SystemExit(f"FAIL: wrong PKG content ID {content_id!r}")
 file_count = struct.unpack_from(">I",header,0x0C)[0]
