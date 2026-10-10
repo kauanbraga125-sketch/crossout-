@@ -47,6 +47,12 @@ jobs:
           cp .sample-src/samples/trophies/sce_sys/icon0.png sce_sys/icon0.png
           test -s sce_sys/icon0.png
 
+      - name: Run host-side Itemzflow compatibility tests
+        run: |
+          set -euxo pipefail
+          g++ -std=c++11 -Wall -Wextra -Werror tests/path_test.cpp -o /tmp/usbfix-path-test
+          /tmp/usbfix-path-test
+
       - name: Compile USB Link Fixer
         run: |
           set -euxo pipefail
