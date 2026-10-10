@@ -69,45 +69,7 @@ jobs:
           readelf -h build/usb-link-fixer.elf
           readelf -h build/usb-link-fixer.elf | grep -q 'ELF64'
           readelf -h build/usb-link-fixer.elf | grep -q 'Advanced Micro Devices X86-64'
-          readelf -Ws build/usb-link-fixer.elf | grep -q '[[:space:]]main        run: |
-          set -euxo pipefail
-          chmod -R a+rwX "$GITHUB_WORKSPACE"
-          docker run --rm --user 0:0 \
-            --env OO_PS4_TOOLCHAIN=/opt/openorbis \
-            --volume "$GITHUB_WORKSPACE:/work" \
-            --volume "$TOOLCHAIN_ROOT:/opt/openorbis" \
-            --workdir /work \
-            ubuntu:20.04 \
-            bash -lc '
-              set -euxo pipefail
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update -qq
-              apt-get install -y --no-install-recommends make libicu66 libssl1.1 ca-certificates
-              make pkg.gp4
-              /opt/openorbis/bin/linux/PkgTool.Core pkg_build pkg.gp4 .
-            '
-          test -s IV0000-ULFX00001_00-USBLinkFixer0001.pkg
-
-      - name: Validate PKG before publishing
-        run: |
-          set -euxo pipefail
-          python3 tools/validate_pkg.py IV0000-ULFX00001_00-USBLinkFixer0001.pkg
-
-      - name: Name artifact
-        run: |
-          set -euxo pipefail
-          cp IV0000-ULFX00001_00-USBLinkFixer0001.pkg PS4-USB-Link-Fixer.pkg
-          sha256sum PS4-USB-Link-Fixer.pkg > PS4-USB-Link-Fixer.pkg.sha256
-
-      - name: Upload PKG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: PS4-USB-Link-Fixer-PS4
-          path: |
-            PS4-USB-Link-Fixer.pkg
-            PS4-USB-Link-Fixer.pkg.sha256
-          if-no-files-found: error
-
+          readelf -Ws build/usb-link-fixer.elf | grep -Eq 'main[[:space:]]*$'
           test -s build/usb-link-fixer.oelf
 
       - name: Build PKG
