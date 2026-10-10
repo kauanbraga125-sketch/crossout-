@@ -93,14 +93,21 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
    explain(out,"SEM BACKUP: sem permissao para pasta /data",log);return false;
  }
  char suffix[24];snprintf(suffix,sizeof(suffix),"%d",(int)type);
- std::string backup=backups+"/"+tid+"-"+suffix+".original.txt";
- // Each link is backed up exactly once; never destroy the recovery record.
- int fd=open(backup.c_str(),O_CREAT|O_EXCL|O_WRONLY,0600);
- if(fd<0){
-    explain(out,errno==EEXIST?"BLOQUEADO: backup anterior existe":
-                       "BLOQUEADO: nao consegui salvar backup",log);
-    return false;
+ std::string backup;
+ int fd=-1;
+ for(unsigned attempt=0;attempt<1024;attempt++){
+   char serial[12];
+   snprintf(serial,sizeof(serial),"%04u",attempt);
+   backup=backups+"/"+tid+"-"+suffix+"-"+serial+".original.txt";
+   fd=open(backup.c_str(),O_CREAT|O_EXCL|O_WRONLY,0600);
+   if(fd>=0)break;
+   if(errno!=EEXIST)break;
  }
+ if(fd<0){
+   explain(out,"BLOQUEADO: nao consegui criar backup exclusivo",log);
+   return false;
+ }
+ if(log){fprintf(log,"BACKUP: %s\n",backup.c_str());fflush(log);}
  std::string record=l.internal+"\n"+l.old_target+"\n"+l.new_target+"\n";
  ssize_t wr=write(fd,record.data(),record.size());
  int e=errno;
