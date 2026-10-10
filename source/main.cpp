@@ -18,7 +18,7 @@
 #include "fixer.h"
 #include "launcher.h"
 
-// PS4 USB Link Fixer 0.5: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 0.6: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -192,7 +192,7 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.5 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
+  label(r,49,75,"v0.6 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
   label(r,50,126,message,2,C(211,222,241),66);
   if(games.empty()){
     label(r,95,310,"Nenhum jogo CUSA encontrado. Consulte o log.",2,C(234,214,180),59);
@@ -318,7 +318,7 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.5: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v0.6: confirmation-required repair, no PKG movement.");
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
   notify("USB Link Fixer: iniciando interface...");
