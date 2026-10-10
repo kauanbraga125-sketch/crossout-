@@ -18,8 +18,9 @@
 #include "fixer.h"
 #include "launcher.h"
 #include "catalog.h"
+#include "native_catalog.h"
 
-// PS4 USB Link Fixer 0.7: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 0.8: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -46,6 +47,8 @@ int confirmation=0; // 0 none, 1 repair, 2 repair+launch
 FILE* logFile=nullptr;
 int usbCount=0;
 CatalogSummary catalogInfo;
+UsbfixGoldhenAccess accessInfo;
+std::string goldhenStatus="TRIANGULO: preparar acesso GoldHEN";
 std::string catalogStatus="Aguardando leitura";
 static void logline(const char* fmt,...) {
   if(!logFile)return;
@@ -209,9 +212,10 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.7 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
+  label(r,49,75,"v0.8 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
   label(r,50,117,message,2,C(211,222,241),66);
   label(r,50,156,catalogStatus,1,C(244,196,125),130);
+  label(r,50,179,goldhenStatus,1,C(134,224,244),135);
   if(games.empty()){
     label(r,95,310,"Nenhum CUSA visivel. Leia o diagnostico acima.",2,C(234,214,180),59);
   }else{
@@ -257,7 +261,7 @@ static void draw(SDL_Renderer* r){
   }
   fill(r,0,654,W,66,C(22,36,55));
   label(r,40,663,"CIMA/BAIXO: selecionar | X: detalhes/confirmar | O: voltar",1,C(207,222,237),90);
-  label(r,40,683,"QUADRADO: reparar | R1: executar | TRIANGULO: examinar HDs",1,C(207,222,237),90);
+  label(r,40,683,"QUADRADO: reparar | R1: executar | TRIANGULO: acesso GoldHEN",1,C(207,222,237),90);
 }
 static void nav(int change){
  if(games.empty()||confirmation)return;
@@ -324,7 +328,24 @@ static void handle(int code,bool& running){
  if(code==1)nav(-1);
  else if(code==2)nav(1);
  else if(code==3)details=!details;
- else if(code==4){scan();}
+ else if(code==4){
+   message="Preparando acesso GoldHEN... aguarde";
+   accessInfo=usbfix_request_goldhen_access();
+   scan();
+   char report[220];
+   snprintf(report,sizeof(report),"GoldHEN: SDK=%lld CF=%llu, acesso enviado=%d retorno=%lld CF=%llu",
+     (long long)accessInfo.sdk,(unsigned long long)accessInfo.sdk_cf,
+     (int)accessInfo.access_attempted,(long long)accessInfo.access,
+     (unsigned long long)accessInfo.access_cf);
+   goldhenStatus=report;
+   logline("ACCESS: %s",report);
+   if(accessInfo.acknowledged()){
+      message=games.empty()?"Acesso solicitado; pastas ainda nao visiveis. Confira errno":
+                            "Acesso GoldHEN confirmado; biblioteca atualizada";
+   } else {
+      message="Acesso GoldHEN nao confirmado. SDK e errno acima.";
+   }
+ }
  else if(code==5){if(details)details=false;else running=false;}
  else if(code==6){
    if(has_candidates()){details=true;confirmation=1;}
@@ -341,7 +362,7 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.7: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v0.8: confirmation-required repair, no PKG movement.");
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
   notify("USB Link Fixer: iniciando interface...");
