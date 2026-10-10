@@ -22,7 +22,8 @@
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
-const int W=1280, H=720;
+const int W=1280, H=720; // logical UI coordinate space
+const int SCREEN_W=1920, SCREEN_H=1080; // same native window size as OpenOrbis SDL2 sample
 enum State { NO_ENTRY, VALID_LINK, BROKEN_CANDIDATE, LOCAL_FILE,
              TARGET_MISSING, MULTIPLE_COPIES, FOREIGN_LINK, ACCESS_ERROR };
 struct Link {
@@ -326,11 +327,16 @@ int main(){
     notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
     sceKernelUsleep(3500000);if(logFile)fclose(logFile);return 2;
   }
-  SDL_Window* w=SDL_CreateWindow("PS4 USB Link Fixer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,W,H,0);
+  SDL_Window* w=SDL_CreateWindow("PS4 USB Link Fixer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,SCREEN_W,SCREEN_H,0);
   if(!w){logline("Window failed: %s",SDL_GetError());notify("USB Link Fixer: falha ao criar janela.");sceKernelUsleep(3500000);SDL_Quit();if(logFile)fclose(logFile);return 3;}
   SDL_Surface* surf=SDL_GetWindowSurface(w);
   SDL_Renderer* r=surf?SDL_CreateSoftwareRenderer(surf):nullptr;
   if(!r){logline("Renderer failed: %s",SDL_GetError());notify("USB Link Fixer: falha ao criar video.");sceKernelUsleep(3500000);SDL_DestroyWindow(w);SDL_Quit();if(logFile)fclose(logFile);return 4;}
+  // Keep the proven PS4 1920x1080 output mode; scale our UI coordinates.
+  // If the SDL port does not support logical scaling, keep the window open.
+  int logicalResult=SDL_RenderSetLogicalSize(r,W,H);
+  logline("STARTUP: 1920x1080 SDL window; logical 1280x720 scale status=%d",
+          logicalResult);
   // Keep the same raw joystick input path as the known working PS4 Browser.
   SDL_Joystick* joystick=nullptr;
   if(SDL_NumJoysticks()>0)joystick=SDL_JoystickOpen(0);
