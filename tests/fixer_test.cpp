@@ -54,7 +54,7 @@ int main(){
  expect(fix_repair(root,id,FIX_GAME,&msg,NULL),"repair only the symbolic link");
  expect(fix_inspect(root,id,FIX_GAME).status==FIX_OK,"repaired link points to live file");
  expect(read_target(internal).find("usb1")!=std::string::npos,"new link points to USB1");
- expect(access((root+"/data/USBLinkFixer/"+id+"-0.original.txt").c_str(),F_OK)==0,
+ expect(access((root+"/data/USBLinkFixer/"+id+"-0-0000.original.txt").c_str(),F_OK)==0,
    "recovery record exists");
  expect(!fix_repair(root,id,FIX_GAME,&msg,NULL),"do not repair same link twice");
  expect(fix_inspect(root,id2,FIX_GAME).status==FIX_ABSENT,"missing games not touched");
@@ -102,9 +102,14 @@ int main(){
  symlink(wrong2.c_str(),mp.c_str());
  // Recovery paths cannot be overwritten by another run.
  dir(root+"/data/USBLinkFixer");
- fake_pkg(root+"/data/USBLinkFixer/"+missing+"-0.original.txt");
- expect(!fix_repair(root,missing,FIX_GAME,&msg,NULL),"existing backup blocks repair");
- expect(read_target(mp)==wrong2,"blocked repair did not change original");
+ fake_pkg(root+"/data/USBLinkFixer/"+missing+"-0-0000.original.txt");
+ expect(fix_repair(root,missing,FIX_GAME,&msg,NULL),"existing backup causes new numbered backup, no overwrite");
+ expect(read_target(mp).find("usb1")!=std::string::npos,"link switched to correct USB1");
+ expect(access((root+"/data/USBLinkFixer/"+missing+"-0-0001.original.txt").c_str(),F_OK)==0,
+   "new backup created in next available slot");
+ struct stat protectedBackup;
+ stat((root+"/data/USBLinkFixer/"+missing+"-0-0000.original.txt").c_str(),&protectedBackup);
+ expect(protectedBackup.st_size==8192,"old recovery file kept unchanged");
  printf("RESULT passes=%d failures=%d\n",passes,failures);
  return failures?1:0;
 }
