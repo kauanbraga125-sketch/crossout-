@@ -7,33 +7,51 @@
 #include <string.h>
 #include <stdint.h>
 
-// Based on the official Itemzflow Launch_App() implementation.
-// The process must have required GoldHEN application privileges.
+// OpenOrbis declares sceLncUtilLaunchApp, but its stub library may not
+// expose the symbol. Itemzflow loads libSceSystemService.sprx first.
+// Resolve it at runtime to avoid a PKG that fails to link or load.
+typedef int32_t (*LaunchFn)(const char*,const char*[],LncAppParam*);
+static LaunchFn resolve_launch() {
+ const char* modules[]={
+   "/system/common/lib/libSceSystemService.sprx",
+   "/system/common/lib/libSceLncUtil.sprx"
+ };
+ const char* symbols[]={"sceLncUtilLaunchApp","sceSystemServiceLaunchApp"};
+ for(unsigned i=0;i<sizeof(modules)/sizeof(modules[0]);i++){
+   int h=sceKernelLoadStartModule(modules[i],0,NULL,0,NULL,NULL);
+   if(h<0)continue;
+   for(unsigned j=0;j<sizeof(symbols)/sizeof(symbols[0]);j++){
+      void* address=NULL;
+      if(sceKernelDlsym(h,symbols[j],&address)>=0 && address){
+         return (LaunchFn)address;
+      }
+   }
+ }
+ return NULL;
+}
 int usbfix_launch_game(const std::string& title_id,std::string* diagnostic){
- if(!fix_valid_id(title_id)){
-    if(diagnostic)*diagnostic="ID de jogo invalido";return -1;
+ if(!fix_valid_id(title_id)){if(diagnostic)*diagnostic="ID de jogo invalido";return -1;}
+ int32_t userId=-1;
+ int32_t result=sceUserServiceGetForegroundUser(&userId);
+ if(result<0 || userId<0){
+   if(diagnostic)*diagnostic="Nao foi possivel identificar o usuario do PS4";
+   return result<0?result:-2;
  }
- int32_t id=-1;
- int32_t e=sceUserServiceGetForegroundUser(&id);
- if(e<0||id<0){
-   if(diagnostic)*diagnostic="Falha ao identificar usuario do PS4";
-   return e<0?e:-2;
+ LaunchFn launch=resolve_launch();
+ if(!launch){
+   if(diagnostic)*diagnostic="Falha ao localizar funcao de abertura do PS4";
+   return -3;
  }
- // Itemzflow explicitly loads the system service module before launch.
- sceKernelLoadStartModule("/system/common/lib/libSceSystemService.sprx",0,NULL,0,NULL,NULL);
- LncAppParam param;
- memset(&param,0,sizeof(param));
+ LncAppParam param;memset(&param,0,sizeof(param));
  param.size=sizeof(param);
- param.user_id=(uint32_t)id;
- param.app_opt=0;
- param.crash_report=0;
+ param.user_id=(uint32_t)userId;
  param.LaunchAppCheck_flag=LaunchApp_SkipSystemUpdate;
- int32_t result=sceLncUtilLaunchApp(title_id.c_str(),NULL,&param);
+ result=launch(title_id.c_str(),NULL,&param);
  if(diagnostic){
-   char buf[120];snprintf(buf,sizeof(buf),result<0?
-   "Nao foi possivel abrir o jogo, codigo 0x%08X":
-   "Solicitacao de abertura enviada (0x%08X)",(unsigned int)result);
-   *diagnostic=buf;
+    char text[144];
+    snprintf(text,sizeof(text),result<0?"Falha ao iniciar (0x%08X)":
+             "Pedido de inicio enviado (0x%08X)",(uint32_t)result);
+    *diagnostic=text;
  }
  return result;
 }
