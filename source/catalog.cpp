@@ -3,6 +3,9 @@
 #include <dirent.h>
 #include <errno.h>
 #include <string.h>
+#ifdef USB_FIXER_PS4
+#include "native_catalog.h"
+#endif
 
 static bool valid_cusa(const char* s) {
  if(!s || strlen(s)!=9 || strncmp(s,"CUSA",4))return false;
@@ -11,28 +14,43 @@ static bool valid_cusa(const char* s) {
 }
 static int scan_dir(const std::string& path,unsigned source,unsigned bit,
                     std::vector<CatalogItem>* games) {
- DIR* d=opendir(path.c_str());
- if(!d)return -errno;
- int seen=0;struct dirent* ent;
- while((ent=readdir(d))!=NULL){
-   if(!valid_cusa(ent->d_name))continue;
-   seen++;
-   bool found=false;
-   for(size_t i=0;i<games->size();i++){
-     if((*games)[i].id==ent->d_name){
-       (*games)[i].sources|=source;
-       if(source==CAT_USB)(*games)[i].usb_mask|=bit;
-       found=true;break;
-     }
-   }
-   if(!found && games->size()<512){
-     CatalogItem x;x.id=ent->d_name;x.sources=source;
-     if(source==CAT_USB)x.usb_mask=bit;
-     games->push_back(x);
-   }
- }
- closedir(d);return seen;
+  int seen=0;
+#ifdef USB_FIXER_PS4
+  // Same native PS4 kernel directory API as the proven v13.18 Trophy Unlocker.
+  std::vector<std::string> names;
+  const int error=usbfix_native_list_directory(path,names);
+  if(error)return error;
+  for(const std::string& name:names){
+    if(!valid_cusa(name.c_str()))continue;
+#else
+  DIR* d=opendir(path.c_str());
+  if(!d)return -errno;
+  struct dirent* ent;
+  while((ent=readdir(d))!=NULL){
+    const std::string name=ent->d_name;
+    if(!valid_cusa(name.c_str()))continue;
+#endif
+    seen++;
+    bool found=false;
+    for(size_t i=0;i<games->size();i++){
+      if((*games)[i].id==name){
+        (*games)[i].sources|=source;
+        if(source==CAT_USB)(*games)[i].usb_mask|=bit;
+        found=true;break;
+      }
+    }
+    if(!found && games->size()<512){
+      CatalogItem x;x.id=name;x.sources=source;
+      if(source==CAT_USB)x.usb_mask=bit;
+      games->push_back(x);
+    }
+  }
+#ifndef USB_FIXER_PS4
+  closedir(d);
+#endif
+  return seen;
 }
+
 void usbfix_collect_games(const std::string& root,
                           std::vector<CatalogItem>* result,
                           CatalogSummary* info) {
