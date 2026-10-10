@@ -15,9 +15,10 @@
 
 #include "font8x8_basic.h"
 #include "path_match.h"
+#include "fixer.h"
+#include "launcher.h"
 
-// PS4 USB Link Fixer 0.3 - read-only interactive safety preflight.
-// This build DOES NOT delete, move, overwrite, reinstall or change game links.
+// PS4 USB Link Fixer 0.4: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -32,12 +33,13 @@ struct Link {
 };
 struct Game {
   std::string id, name;
-  Link app, patch;
+  Link app, patch, dlc;
 };
 std::vector<Game> games;
 std::string message="Analisando os HDs...";
 int selected=0;
 bool details=false;
+int confirmation=0; // 0 none, 1 repair, 2 repair+launch
 FILE* logFile=nullptr;
 int usbCount=0;
 static void logline(const char* fmt,...) {
@@ -78,27 +80,17 @@ static const char* state_name(State s){
   }
 }
 static Link inspect(const std::string& id,const char* local,const char* ext){
-  Link x;char path[300];snprintf(path,sizeof(path),"/user/%s/%s/%s",
-    !strcmp(local,"app.pkg")?"app":"patch",id.c_str(),local);
-  x.source=path;
-  struct stat lst;
-  if(lstat(path,&lst)!=0){
-    x.err=errno;x.state=(errno==ENOENT?NO_ENTRY:ACCESS_ERROR);return x;
-  }
-  if(!S_ISLNK(lst.st_mode)){x.state=LOCAL_FILE;return x;}
-  char buf[512];ssize_t n=readlink(path,buf,sizeof(buf)-1);
-  if(n<0 || n>=(ssize_t)sizeof(buf)-1){x.state=ACCESS_ERROR;x.err=errno;return x;}
-  buf[n]=0;x.old_target=buf;
-  bool recognized=false;
-  for(int i=0;i<8;i++){
-    std::string p=usb(id,ext,i);
-    if(usbfix_same_path(x.old_target.c_str(), p.c_str()))recognized=true;
-    if(regular_nonempty(p)){x.copies++;x.proposed=p;}
-  }
-  if(!recognized){x.state=FOREIGN_LINK;return x;}
-  if(regular_nonempty(x.old_target)){x.state=VALID_LINK;return x;}
-  if(x.copies==1){x.state=BROKEN_CANDIDATE;return x;}
-  x.state=x.copies>1?MULTIPLE_COPIES:TARGET_MISSING;
+  FixType type=FIX_GAME;
+  if(!strcmp(ext,"app_patch.pkg"))type=FIX_UPDATE;
+  if(!strcmp(ext,"app_dlc.pkg"))type=FIX_DLC;
+  FixLink f=fix_inspect("",id,type);
+  Link x;
+  x.state=(State)f.status;
+  x.source=f.internal;
+  x.old_target=f.old_target;
+  x.proposed=f.new_target;
+  x.copies=f.matches;
+  x.err=f.errno_value;
   return x;
 }
 static uint16_t u16(const unsigned char *p){return uint16_t(p[0])|(uint16_t(p[1])<<8);}
@@ -130,7 +122,7 @@ static std::string read_title(const std::string& id){
   return id;
 }
 static void scan(){
-  games.clear();usbCount=0;selected=0;details=false;
+  games.clear();usbCount=0;selected=0;details=false;confirmation=0;
   for(int i=0;i<8;i++){char p[32];snprintf(p,sizeof(p),"/mnt/usb%d",i);
     DIR *u=opendir(p);if(u){usbCount++;closedir(u);}}
   DIR *d=opendir("/user/app");
@@ -144,10 +136,11 @@ static void scan(){
     Game g;g.id=ent->d_name;g.name=read_title(g.id);
     g.app=inspect(g.id,"app.pkg","app.pkg");
     g.patch=inspect(g.id,"patch.pkg","app_patch.pkg");
-    logline("%s | name=%s | app=%s [%s] -> [%s] | patch=%s [%s] -> [%s]",
+    g.dlc=inspect(g.id,"ac.pkg","app_dlc.pkg");
+    logline("%s | name=%s | app=%s [%s] -> [%s] | patch=%s [%s] -> [%s] | dlc=%s [%s] -> [%s]",
       g.id.c_str(),g.name.c_str(),state_name(g.app.state),g.app.old_target.c_str(),
       g.app.proposed.c_str(),state_name(g.patch.state),g.patch.old_target.c_str(),
-      g.patch.proposed.c_str());
+      g.patch.proposed.c_str(),state_name(g.dlc.state),g.dlc.old_target.c_str(),g.dlc.proposed.c_str());
     games.push_back(g);
   }
   closedir(d);
@@ -158,7 +151,7 @@ static void scan(){
     games[j]=tmp;
   }
   int candidates=0;
-  for(const auto& g:games) if(g.app.state==BROKEN_CANDIDATE || g.patch.state==BROKEN_CANDIDATE)candidates++;
+  for(const auto& g:games) if(g.app.state==BROKEN_CANDIDATE || g.patch.state==BROKEN_CANDIDATE || g.dlc.state==BROKEN_CANDIDATE)candidates++;
   char m[220];snprintf(m,sizeof(m),"%d jogos | %d HDs | %d com links suspeitos",
     (int)games.size(),usbCount,candidates);
   message=m;logline("SUMMARY %s; READ ONLY",message.c_str());
@@ -198,7 +191,7 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.2 - DIAGNOSTICO SEGURO (SEM ALTERACOES)",1,C(194,214,237));
+  label(r,49,75,"v0.4 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
   label(r,50,126,message,2,C(211,222,241),66);
   if(games.empty()){
     label(r,95,310,"Nenhum jogo CUSA encontrado. Consulte o log.",2,C(234,214,180),59);
@@ -227,33 +220,106 @@ static void draw(SDL_Renderer* r){
     label(r,94,377,"ATUALIZACAO: "+std::string(state_name(g.patch.state)),2,status_color(g.patch.state),55);
     label(r,94,417,"ATUAL: "+shorten(g.patch.old_target,74),1,C(211,223,239),100);
     label(r,94,439,"LOCALIZADO: "+shorten(g.patch.proposed,74),1,C(211,223,239),100);
-    label(r,94,486,"Apenas analise. Nenhum link foi modificado.",2,C(255,189,107),65);
+    label(r,94,477,"DLC: "+std::string(state_name(g.dlc.state)),2,status_color(g.dlc.state),58);
+    label(r,94,507,"QUADRADO: reparar   R1: executar",2,C(255,189,107),58);
   }
-  fill(r,0,660,W,60,C(22,36,55));
-  label(r,50,678,"D-PAD: navegar    X: detalhes    TRIANGULO: reler    O: sair",2,C(207,222,237),66);
+  if(confirmation && !games.empty()){
+    fill(r,170,246,940,246,C(63,42,39));
+    fill(r,170,246,940,6,C(255,185,92));
+    label(r,202,272,confirmation==2?"CORRIGIR LINKS E EXECUTAR?":"CONFIRMAR REPARO DOS LINKS?",2,C(255,239,217),50);
+    label(r,203,325,"Backup antes de alterar; sem mover arquivos PKG.",2,C(232,236,241),55);
+    label(r,203,380,shorten(games[selected].name,42),2,C(220,222,240),42);
+    label(r,203,443,"X: confirmar    O: cancelar",2,C(255,185,92),55);
+  }
+  fill(r,0,654,W,66,C(22,36,55));
+  label(r,40,663,"CIMA/BAIXO: selecionar | X: detalhes/confirmar | O: voltar",1,C(207,222,237),90);
+  label(r,40,683,"QUADRADO: reparar | R1: executar | TRIANGULO: examinar HDs",1,C(207,222,237),90);
 }
 static void nav(int change){
-  if(games.empty())return;
-  selected+=change;
-  if(selected<0)selected=0;
-  if(selected>=int(games.size()))selected=int(games.size())-1;
-  details=false;
+ if(games.empty()||confirmation)return;
+ selected+=change;
+ if(selected<0)selected=0;
+ if(selected>=(int)games.size())selected=(int)games.size()-1;
+ details=false;
 }
-static void handle(const int code,bool& running){
-  if(code==1)nav(-1);
-  else if(code==2)nav(1);
-  else if(code==3)details=!details;
-  else if(code==4){scan();}
-  else if(code==5){if(details)details=false;else running=false;}
+static bool launch_current(){
+ if(games.empty())return false;
+ std::string tid=games[selected].id,reason;
+ FixLink base=fix_inspect("",tid,FIX_GAME);
+ FixLink patch=fix_inspect("",tid,FIX_UPDATE);
+ if((base.status!=FIX_OK && base.status!=FIX_LOCAL)||
+    (patch.status!=FIX_OK && patch.status!=FIX_LOCAL && patch.status!=FIX_ABSENT)){
+   message="NAO EXECUTADO: o jogo/atualizacao ainda tem problema de caminho";
+   logline("LAUNCH BLOCKED %s base=%s patch=%s",tid.c_str(),
+           fix_status(base.status),fix_status(patch.status));
+   return false;
+ }
+ int err=usbfix_launch_game(tid,&reason);
+ message=reason;logline("LAUNCH %s: %s",tid.c_str(),reason.c_str());
+ return err>=0;
 }
+static void repair_selected(bool then_launch){
+ if(games.empty())return;
+ std::string tid=games[selected].id;
+ int fixed=0;bool failed=false;
+ for(int i=0;i<3;i++){
+   FixType type=(FixType)i;
+   FixLink before=fix_inspect("",tid,type);
+   if(before.status==FIX_CANDIDATE){
+     std::string report;
+     if(fix_repair("",tid,type,&report,logFile))fixed++;
+     else failed=true;
+     logline("REPAIR %s type=%d: %s",tid.c_str(),i,report.c_str());
+     message=report;
+   }
+ }
+ // Refresh the selected game's link statuses without losing current list position.
+ Game& g=games[selected];
+ g.app=inspect(g.id,"app.pkg","app.pkg");
+ g.patch=inspect(g.id,"patch.pkg","app_patch.pkg");
+ g.dlc=inspect(g.id,"ac.pkg","app_dlc.pkg");
+ char buf[200];
+ snprintf(buf,sizeof(buf),"Resultado %s: %d links reparados; %s",
+    tid.c_str(),fixed,failed?"consulte /data/USBLinkFixer/scan.txt":"verifique jogo");
+ message=buf;logline("%s",buf);
+ if(then_launch && !failed)launch_current();
+}
+static bool has_candidates(){
+ if(games.empty())return false;
+ const std::string& id=games[selected].id;
+ return fix_inspect("",id,FIX_GAME).status==FIX_CANDIDATE ||
+        fix_inspect("",id,FIX_UPDATE).status==FIX_CANDIDATE ||
+        fix_inspect("",id,FIX_DLC).status==FIX_CANDIDATE;
+}
+static void handle(int code,bool& running){
+ if(confirmation){
+   if(code==3){int mode=confirmation;confirmation=0;repair_selected(mode==2);}
+   else if(code==5)confirmation=0;
+   return;
+ }
+ if(code==1)nav(-1);
+ else if(code==2)nav(1);
+ else if(code==3)details=!details;
+ else if(code==4){scan();}
+ else if(code==5){if(details)details=false;else running=false;}
+ else if(code==6){
+   if(has_candidates()){details=true;confirmation=1;}
+   else message="Nenhum link reparavel para esse jogo.";
+ }
+ else if(code==7){
+   if(has_candidates()){details=true;confirmation=2;}
+   else launch_current();
+ }
+}
+
 }
 int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.3: READ ONLY, no changes to games or links.");
+  logline("USB Link Fixer v0.4: confirmation-required repair, no PKG movement.");
   scan();
-  notify("USB Link Fixer 0.3: diagnostico concluido, sem alterar arquivos.");
+  notify("USB Link Fixer 0.4: escolha jogo. Quadrado: reparar / R1: executar.");
   if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK)!=0){
     logline("SDL init failed: %s",SDL_GetError());
     notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
@@ -277,7 +343,9 @@ int main(){
       else if(e.type==SDL_JOYBUTTONDOWN){
         if(e.jbutton.button==0)handle(3,running);
         else if(e.jbutton.button==1)handle(5,running);
+        else if(e.jbutton.button==2)handle(6,running);
         else if(e.jbutton.button==3)handle(4,running);
+        else if(e.jbutton.button==5)handle(7,running);
         else if(e.jbutton.button==11)handle(1,running);
         else if(e.jbutton.button==12)handle(2,running);
       }else if(e.type==SDL_JOYHATMOTION){
@@ -289,6 +357,8 @@ int main(){
           case SDLK_DOWN:handle(2,running);break;
           case SDLK_RETURN:handle(3,running);break;
           case SDLK_r:handle(4,running);break;
+          case SDLK_F5:handle(6,running);break;
+          case SDLK_F6:handle(7,running);break;
           case SDLK_ESCAPE:handle(5,running);break;
         }
       }
