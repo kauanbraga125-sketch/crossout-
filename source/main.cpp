@@ -254,7 +254,7 @@ int main(){
   logline("USB Link Fixer v0.3: READ ONLY, no changes to games or links.");
   scan();
   notify("USB Link Fixer 0.3: diagnostico concluido, sem alterar arquivos.");
-  if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)!=0){
+  if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK)!=0){
     logline("SDL init failed: %s",SDL_GetError());
     notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
     sceKernelUsleep(3500000);if(logFile)fclose(logFile);return 2;
@@ -264,35 +264,23 @@ int main(){
   SDL_Surface* surf=SDL_GetWindowSurface(w);
   SDL_Renderer* r=surf?SDL_CreateSoftwareRenderer(surf):nullptr;
   if(!r){logline("Renderer failed: %s",SDL_GetError());notify("USB Link Fixer: falha ao criar video.");sceKernelUsleep(3500000);SDL_DestroyWindow(w);SDL_Quit();if(logFile)fclose(logFile);return 4;}
-  SDL_GameController* controller=nullptr;
-  if(SDL_NumJoysticks()>0 && SDL_IsGameController(0))
-    controller=SDL_GameControllerOpen(0);
-  const bool gamepad=(controller!=nullptr);
+  // Keep the same raw joystick input path as the known working PS4 Browser.
   SDL_Joystick* joystick=nullptr;
-  if(!gamepad && SDL_NumJoysticks()>0)
-    joystick=SDL_JoystickOpen(0);
-  logline("CONTROL: SDL joysticks=%d gamecontroller=%d raw_fallback=%d",
-          SDL_NumJoysticks(),(int)gamepad,(int)(joystick!=nullptr));
+  if(SDL_NumJoysticks()>0)joystick=SDL_JoystickOpen(0);
+  logline("CONTROL: SDL joysticks=%d raw_joystick_open=%d",
+          SDL_NumJoysticks(),(int)(joystick!=nullptr));
   bool running=true;
   while(running){
     SDL_Event e;
     while(SDL_PollEvent(&e)){
       if(e.type==SDL_QUIT)running=false;
-      else if(e.type==SDL_CONTROLLERBUTTONDOWN && gamepad){
-        switch(e.cbutton.button){
-          case SDL_CONTROLLER_BUTTON_DPAD_UP:handle(1,running);break;
-          case SDL_CONTROLLER_BUTTON_DPAD_DOWN:handle(2,running);break;
-          case SDL_CONTROLLER_BUTTON_A:handle(3,running);break;
-          case SDL_CONTROLLER_BUTTON_Y:handle(4,running);break;
-          case SDL_CONTROLLER_BUTTON_B:handle(5,running);break;
-        }
-      }else if(e.type==SDL_JOYBUTTONDOWN && !gamepad){
+      else if(e.type==SDL_JOYBUTTONDOWN){
         if(e.jbutton.button==0)handle(3,running);
         else if(e.jbutton.button==1)handle(5,running);
         else if(e.jbutton.button==3)handle(4,running);
         else if(e.jbutton.button==11)handle(1,running);
         else if(e.jbutton.button==12)handle(2,running);
-      }else if(e.type==SDL_JOYHATMOTION && !gamepad){
+      }else if(e.type==SDL_JOYHATMOTION){
         if(e.jhat.value&SDL_HAT_UP)handle(1,running);
         else if(e.jhat.value&SDL_HAT_DOWN)handle(2,running);
       }else if(e.type==SDL_KEYDOWN){
@@ -307,7 +295,6 @@ int main(){
     }
     draw(r);SDL_RenderPresent(r);SDL_UpdateWindowSurface(w);SDL_Delay(20);
   }
-  if(controller)SDL_GameControllerClose(controller);
   if(joystick)SDL_JoystickClose(joystick);
   SDL_DestroyRenderer(r);SDL_DestroyWindow(w);SDL_Quit();
   if(logFile)fclose(logFile);
