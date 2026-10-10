@@ -262,9 +262,15 @@ int main(){
   SDL_Surface* surf=SDL_GetWindowSurface(w);
   SDL_Renderer* r=surf?SDL_CreateSoftwareRenderer(surf):nullptr;
   if(!r){logline("Renderer failed: %s",SDL_GetError());SDL_DestroyWindow(w);SDL_Quit();return 4;}
-  bool gamepad=(SDL_NumJoysticks()>0 && SDL_IsGameController(0));
-  if(gamepad)SDL_GameControllerOpen(0);
-  else if(SDL_NumJoysticks()>0)SDL_JoystickOpen(0);
+  SDL_GameController* controller=nullptr;
+  if(SDL_NumJoysticks()>0 && SDL_IsGameController(0))
+    controller=SDL_GameControllerOpen(0);
+  const bool gamepad=(controller!=nullptr);
+  SDL_Joystick* joystick=nullptr;
+  if(!gamepad && SDL_NumJoysticks()>0)
+    joystick=SDL_JoystickOpen(0);
+  logline("CONTROL: SDL joysticks=%d gamecontroller=%d raw_fallback=%d",
+          SDL_NumJoysticks(),(int)gamepad,(int)(joystick!=nullptr));
   bool running=true;
   while(running){
     SDL_Event e;
@@ -299,6 +305,8 @@ int main(){
     }
     draw(r);SDL_RenderPresent(r);SDL_UpdateWindowSurface(w);SDL_Delay(20);
   }
+  if(controller)SDL_GameControllerClose(controller);
+  if(joystick)SDL_JoystickClose(joystick);
   SDL_DestroyRenderer(r);SDL_DestroyWindow(w);SDL_Quit();
   if(logFile)fclose(logFile);
   return 0;
