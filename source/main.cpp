@@ -17,8 +17,9 @@
 #include "path_match.h"
 #include "fixer.h"
 #include "launcher.h"
+#include "catalog.h"
 
-// PS4 USB Link Fixer 0.6: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 0.7: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -35,6 +36,7 @@ struct Link {
 struct Game {
   std::string id, name;
   Link app, patch, dlc;
+  unsigned sources=0, usb_mask=0;
 };
 std::vector<Game> games;
 std::string message="Analisando os HDs...";
@@ -43,6 +45,8 @@ bool details=false;
 int confirmation=0; // 0 none, 1 repair, 2 repair+launch
 FILE* logFile=nullptr;
 int usbCount=0;
+CatalogSummary catalogInfo;
+std::string catalogStatus="Aguardando leitura";
 static void logline(const char* fmt,...) {
   if(!logFile)return;
   va_list ap;va_start(ap,fmt);vfprintf(logFile,fmt,ap);va_end(ap);
@@ -124,39 +128,52 @@ static std::string read_title(const std::string& id){
 }
 static void scan(){
   games.clear();usbCount=0;selected=0;details=false;confirmation=0;
-  for(int i=0;i<8;i++){char p[32];snprintf(p,sizeof(p),"/mnt/usb%d",i);
-    DIR *u=opendir(p);if(u){usbCount++;closedir(u);}}
-  DIR *d=opendir("/user/app");
-  if(!d){message="ERRO: nao consigo abrir /user/app";logline("%s errno=%d",message.c_str(),errno);return;}
-  struct dirent *ent;
-  while((ent=readdir(d))){
-    if(!valid_cusa(ent->d_name))continue;
-    char p[260];snprintf(p,sizeof(p),"/user/app/%s",ent->d_name);
-    struct stat st;
-    if(stat(p,&st)!=0 || !S_ISDIR(st.st_mode))continue;
-    Game g;g.id=ent->d_name;g.name=read_title(g.id);
+  std::vector<CatalogItem> entries;
+  usbfix_collect_games("",&entries,&catalogInfo);
+  int usbGames=0;
+  for(int i=0;i<8;i++){
+    if(catalogInfo.usb[i]>=0)usbCount++;
+    if(catalogInfo.usb[i]>0)usbGames+=catalogInfo.usb[i];
+  }
+  for(size_t i=0;i<entries.size();i++){
+    Game g;
+    g.id=entries[i].id;
+    g.sources=entries[i].sources;
+    g.usb_mask=entries[i].usb_mask;
+    g.name=read_title(g.id);
     g.app=inspect(g.id,"app.pkg","app.pkg");
     g.patch=inspect(g.id,"patch.pkg","app_patch.pkg");
     g.dlc=inspect(g.id,"ac.pkg","app_dlc.pkg");
-    logline("%s | name=%s | app=%s [%s] -> [%s] | patch=%s [%s] -> [%s] | dlc=%s [%s] -> [%s]",
-      g.id.c_str(),g.name.c_str(),state_name(g.app.state),g.app.old_target.c_str(),
+    logline("%s | name=%s | sources=%u usb_mask=%u | app=%s [%s] -> [%s] | patch=%s [%s] -> [%s] | dlc=%s [%s] -> [%s]",
+      g.id.c_str(),g.name.c_str(),g.sources,g.usb_mask,
+      state_name(g.app.state),g.app.old_target.c_str(),
       g.app.proposed.c_str(),state_name(g.patch.state),g.patch.old_target.c_str(),
       g.patch.proposed.c_str(),state_name(g.dlc.state),g.dlc.old_target.c_str(),g.dlc.proposed.c_str());
     games.push_back(g);
   }
-  closedir(d);
-  // Simple insertion sort avoids pulling unsupported libc++ threading helpers.
   for(size_t i=1;i<games.size();i++){
     Game tmp=games[i];size_t j=i;
     while(j>0 && tmp.name<games[j-1].name){games[j]=games[j-1];--j;}
     games[j]=tmp;
   }
   int candidates=0;
-  for(const auto& g:games) if(g.app.state==BROKEN_CANDIDATE || g.patch.state==BROKEN_CANDIDATE || g.dlc.state==BROKEN_CANDIDATE)candidates++;
-  char m[220];snprintf(m,sizeof(m),"%d jogos | %d HDs | %d com links suspeitos",
-    (int)games.size(),usbCount,candidates);
-  message=m;logline("SUMMARY %s; READ ONLY",message.c_str());
+  for(const auto& g:games)if(g.app.state==BROKEN_CANDIDATE ||
+     g.patch.state==BROKEN_CANDIDATE || g.dlc.state==BROKEN_CANDIDATE)candidates++;
+  char line[220];
+  snprintf(line,sizeof(line),"Jogos: %u | HDs Itemzflow: %d | links suspeitos: %d",
+    (unsigned)games.size(),usbCount,candidates);
+  message=line;
+  snprintf(line,sizeof(line),"/user/app: %d (errno=%d)  appmeta: %d  ext0: %d  HD jogos: %d",
+    catalogInfo.internal,catalogInfo.internal_errno,catalogInfo.appmeta,catalogInfo.ext0,usbGames);
+  catalogStatus=line;
+  logline("DIAGNOSTICO: %s | %s | systemmeta=%d",message.c_str(),
+      catalogStatus.c_str(),catalogInfo.systemmeta);
+  for(int i=0;i<8;i++)logline("USB%d itemzflow/apps count: %d",i,catalogInfo.usb[i]);
+  if(games.empty() && catalogInfo.internal<0){
+    message="A pasta interna nao abriu. Consulte errno abaixo.";
+  }
 }
+
 static void fill(SDL_Renderer *r,int x,int y,int w,int h,SDL_Color c){
   SDL_Rect z{x,y,w,h};SDL_SetRenderDrawColor(r,c.r,c.g,c.b,255);SDL_RenderFillRect(r,&z);
 }
@@ -192,17 +209,18 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.6 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
-  label(r,50,126,message,2,C(211,222,241),66);
+  label(r,49,75,"v0.7 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
+  label(r,50,117,message,2,C(211,222,241),66);
+  label(r,50,156,catalogStatus,1,C(244,196,125),130);
   if(games.empty()){
-    label(r,95,310,"Nenhum jogo CUSA encontrado. Consulte o log.",2,C(234,214,180),59);
+    label(r,95,310,"Nenhum CUSA visivel. Leia o diagnostico acima.",2,C(234,214,180),59);
   }else{
     const int shown=12;
     int start=selected-(shown/2);
     if(start<0)start=0;
     if(start>int(games.size())-shown)start=(int(games.size())-shown>0?int(games.size())-shown:0);
     for(int i=start;i<int(games.size()) && i<start+shown;i++){
-      int y=184+(i-start)*36;
+      int y=200+(i-start)*36;
       const Game& g=games[i];
       if(i==selected)fill(r,35,y-7,1210,34,C(42,78,116));
       label(r,48,y,g.id,2,C(154,197,237),10);
@@ -223,6 +241,11 @@ static void draw(SDL_Renderer* r){
     label(r,94,439,"LOCALIZADO: "+shorten(g.patch.proposed,74),1,C(211,223,239),100);
     label(r,94,477,"DLC: "+std::string(state_name(g.dlc.state)),2,status_color(g.dlc.state),58);
     label(r,94,507,"QUADRADO: reparar   R1: executar",2,C(255,189,107),58);
+    char src[108];
+    snprintf(src,sizeof(src),"ORIGEM: interno=%d ext0=%d appmeta=%d USB mask=0x%02x",
+      (int)((g.sources&CAT_INTERNAL)!=0),(int)((g.sources&CAT_EXT0)!=0),
+      (int)((g.sources&CAT_APPMETA)!=0),g.usb_mask);
+    label(r,94,531,src,1,C(210,222,242),100);
   }
   if(confirmation && !games.empty()){
     fill(r,170,246,940,246,C(63,42,39));
@@ -318,7 +341,7 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.6: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v0.7: confirmation-required repair, no PKG movement.");
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
   notify("USB Link Fixer: iniciando interface...");
@@ -337,7 +360,7 @@ int main(){
   int logicalResult=SDL_RenderSetLogicalSize(r,W,H);
   logline("STARTUP: 1920x1080 SDL window; logical 1280x720 scale status=%d",
           logicalResult);
-  // Keep the same raw joystick input path as the known working PS4 Browser.
+  // Known working Trophy Unlocker uses 15/16; retain joystick raw fallback.
   SDL_Joystick* joystick=nullptr;
   if(SDL_NumJoysticks()>0)joystick=SDL_JoystickOpen(0);
   logline("CONTROL: SDL joysticks=%d raw_joystick_open=%d",
@@ -361,8 +384,8 @@ int main(){
         else if(e.jbutton.button==2)handle(6,running);
         else if(e.jbutton.button==3)handle(4,running);
         else if(e.jbutton.button==5)handle(7,running);
-        else if(e.jbutton.button==11)handle(1,running);
-        else if(e.jbutton.button==12)handle(2,running);
+        else if(e.jbutton.button==11 || e.jbutton.button==15)handle(1,running);
+        else if(e.jbutton.button==12 || e.jbutton.button==16)handle(2,running);
       }else if(e.type==SDL_JOYHATMOTION){
         if(e.jhat.value&SDL_HAT_UP)handle(1,running);
         else if(e.jhat.value&SDL_HAT_DOWN)handle(2,running);
