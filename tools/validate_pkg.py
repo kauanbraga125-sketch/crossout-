@@ -38,7 +38,7 @@ if b"ULFX00001" not in sfo or EXPECTED_CONTENT_ID.encode() not in sfo:
     raise SystemExit("FAIL: incorrect title ID or content ID in param.sfo")
 # The OpenOrbis homebrew instructions explicitly require a 512x512 RGB PNG.
 icon = Path("sce_sys/icon0.png").read_bytes()
-if not icon.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+if not icon.startswith(b"\x89PNG\r\n\x1a\n"):
     raise SystemExit("FAIL: icon0.png is not PNG")
 width, height, bit_depth, color_type = (
     *struct.unpack_from(">II", icon, 16), icon[24], icon[25]
@@ -59,9 +59,9 @@ def value_for(key):
         data_pos = value_start + data_off
         if key_pos >= len(sfo) or data_pos + length > len(sfo):
             raise SystemExit("FAIL: out-of-bounds SFO entry")
-        name = sfo[key_pos:].split(b"\\0", 1)[0].decode("utf-8", "replace")
+        name = sfo[key_pos:].split(b"\0", 1)[0].decode("utf-8", "replace")
         if name == key:
-            return sfo[data_pos:data_pos + length].split(b"\\0", 1)[0]
+            return sfo[data_pos:data_pos + length].split(b"\0", 1)[0]
     return None
 for key, desired in {
     "CATEGORY": b"gd",
