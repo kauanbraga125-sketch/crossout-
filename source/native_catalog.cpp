@@ -24,7 +24,7 @@ static int read_entries(const uint8_t* b,size_t bytes,std::vector<std::string>& 
     if(rec<9 || rec>bytes-at || len==0 || (size_t)len+9>rec)return -EIO;
     const char* name=(const char*)(b+at+8);
     if(name[len]!='\0'||memchr(name,0,len)||memchr(name,'/',len))return -EIO;
-    if(memcmp(name,".",len) || len!=1){
+    if(!(len==1&&name[0]=='.')){
       if(!((len==2)&&name[0]=='.'&&name[1]=='.')){
         if(out.size()>=8192)return -EOVERFLOW;
         out.push_back(std::string(name,len));
