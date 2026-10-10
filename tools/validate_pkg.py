@@ -74,7 +74,7 @@ for key, desired in {
     "CATEGORY": b"gd",
     "TITLE_ID": b"ULFX00001",
     "CONTENT_ID": EXPECTED_CONTENT_ID.encode(),
-    "APP_VER": b"06.00",
+    "APP_VER": b"07.00",
 }.items():
     if value_for(key) != desired:
         raise SystemExit(f"FAIL: SFO {key} mismatch: {value_for(key)!r} != {desired!r}")
