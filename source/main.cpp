@@ -19,8 +19,9 @@
 #include "launcher.h"
 #include "catalog.h"
 #include "native_catalog.h"
+#include "ps4_link_io.h"
 
-// PS4 USB Link Fixer 0.8: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 0.9: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -100,6 +101,11 @@ static Link inspect(const std::string& id,const char* local,const char* ext){
   x.copies=f.matches;
   x.err=f.errno_value;
   return x;
+}
+static std::string detail_state(const Link& link){
+  if(link.state==ACCESS_ERROR && link.err==EAGAIN)return "AGUARDANDO TRIANGULO";
+  if(link.state==ACCESS_ERROR && link.err==ENOSYS)return "API DE LINK INDISPONIVEL (78)";
+  return state_name(link.state);
 }
 static uint16_t u16(const unsigned char *p){return uint16_t(p[0])|(uint16_t(p[1])<<8);}
 static uint32_t u32(const unsigned char *p){return uint32_t(u16(p))|(uint32_t(u16(p+2))<<16);}
@@ -212,7 +218,7 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v0.8 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
+  label(r,49,75,"v0.9 - REPARO COM BACKUP E CONFIRMACAO",1,C(194,214,237));
   label(r,50,117,message,2,C(211,222,241),66);
   label(r,50,156,catalogStatus,1,C(244,196,125),130);
   label(r,50,179,goldhenStatus,1,C(134,224,244),135);
@@ -229,7 +235,7 @@ static void draw(SDL_Renderer* r){
       if(i==selected)fill(r,35,y-7,1210,34,C(42,78,116));
       label(r,48,y,g.id,2,C(154,197,237),10);
       label(r,235,y,shorten(g.name,41),2,C(235,241,248),43);
-      label(r,930,y,shorten(state_name(g.app.state),19),1,status_color(g.app.state),19);
+      label(r,930,y,shorten(detail_state(g.app),19),1,status_color(g.app.state),19);
     }
   }
   if(details&&!games.empty()){
@@ -237,19 +243,23 @@ static void draw(SDL_Renderer* r){
     fill(r,70,212,1140,320,C(28,42,61));
     fill(r,70,212,1140,6,C(81,150,218));
     label(r,94,237,shorten(g.name,45),2,C(250,251,254),46);
-    label(r,94,277,g.id+"   JOGO: "+state_name(g.app.state),2,status_color(g.app.state),55);
+    label(r,94,277,g.id+"   JOGO: "+detail_state(g.app),2,status_color(g.app.state),55);
     label(r,94,317,"ATUAL: "+shorten(g.app.old_target,74),1,C(211,223,239),100);
     label(r,94,339,"LOCALIZADO: "+shorten(g.app.proposed,74),1,C(211,223,239),100);
-    label(r,94,377,"ATUALIZACAO: "+std::string(state_name(g.patch.state)),2,status_color(g.patch.state),55);
+    label(r,94,377,"ATUALIZACAO: "+detail_state(g.patch),2,status_color(g.patch.state),55);
     label(r,94,417,"ATUAL: "+shorten(g.patch.old_target,74),1,C(211,223,239),100);
     label(r,94,439,"LOCALIZADO: "+shorten(g.patch.proposed,74),1,C(211,223,239),100);
-    label(r,94,477,"DLC: "+std::string(state_name(g.dlc.state)),2,status_color(g.dlc.state),58);
+    label(r,94,477,"DLC: "+detail_state(g.dlc),2,status_color(g.dlc.state),58);
     label(r,94,507,"QUADRADO: reparar   R1: executar",2,C(255,189,107),58);
     char src[108];
     snprintf(src,sizeof(src),"ORIGEM: interno=%d ext0=%d appmeta=%d USB mask=0x%02x",
       (int)((g.sources&CAT_INTERNAL)!=0),(int)((g.sources&CAT_EXT0)!=0),
       (int)((g.sources&CAT_APPMETA)!=0),g.usb_mask);
     label(r,94,531,src,1,C(210,222,242),100);
+    char diags[145];
+    snprintf(diags,sizeof(diags),"ERROS: jogo=%d  atualizacao=%d  DLC=%d",
+             g.app.err,g.patch.err,g.dlc.err);
+    label(r,94,549,diags,1,C(255,205,156),100);
   }
   if(confirmation && !games.empty()){
     fill(r,170,246,940,246,C(63,42,39));
@@ -331,6 +341,7 @@ static void handle(int code,bool& running){
  else if(code==4){
    message="Preparando acesso GoldHEN... aguarde";
    accessInfo=usbfix_request_goldhen_access();
+   usbfix_io::set_authorized(accessInfo.acknowledged());
    scan();
    char report[220];
    snprintf(report,sizeof(report),"GoldHEN: SDK=%lld CF=%llu, acesso enviado=%d retorno=%lld CF=%llu",
@@ -362,7 +373,8 @@ int main(){
   mkdir("/data/USBLinkFixer",0700);
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v0.8: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v0.9: confirmation-required repair, no PKG movement.");
+  usbfix_io::set_authorized(false);
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
   notify("USB Link Fixer: iniciando interface...");
