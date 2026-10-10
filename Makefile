@@ -9,7 +9,7 @@ INTDIR := build
 MODULE_DATA := $(TOOLCHAIN)/src/modules
 CPPFILES := $(wildcard $(PROJDIR)/*.cpp)
 OBJS := $(patsubst $(PROJDIR)/%.cpp,$(INTDIR)/%.o,$(CPPFILES))
-CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include
+CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c -D_GNU_SOURCE -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include
 CXXFLAGS := $(CFLAGS) -std=c++11 -isystem $(TOOLCHAIN)/include/c++/v1
 LDFLAGS := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr -L$(TOOLCHAIN)/lib $(LIBS) $(TOOLCHAIN)/lib/crt1.o
 CCX ?= clang++-18
