@@ -12,7 +12,7 @@
 #include <errno.h>
 #include <vector>
 #include <string>
-#include <algorithm>
+
 #include "font8x8_basic.h"
 
 // PS4 USB Link Fixer 0.2 - read-only interactive safety preflight.
@@ -102,6 +102,7 @@ static Link inspect(const std::string& id,const char* local,const char* ext){
 }
 static uint16_t u16(const unsigned char *p){return uint16_t(p[0])|(uint16_t(p[1])<<8);}
 static uint32_t u32(const unsigned char *p){return uint32_t(u16(p))|(uint32_t(u16(p+2))<<16);}
+static size_t safe_len(const char* s,size_t limit){size_t k=0;while(k<limit&&s[k])k++;return k;}
 static std::string read_title(const std::string& id){
   char p[340];
   const char* fmt[]={"/system_data/priv/appmeta/%s/param.sfo",
@@ -120,7 +121,7 @@ static std::string read_title(const std::string& id){
       if(key>=len || data>=len || datalen>len-data)continue;
       if(key+5>len || memcmp(buf+key,"TITLE",5))continue;
       if(key+5<len && buf[key+5]!=0)continue;
-      std::string title((const char*)(buf+data),strnlen((const char*)buf+data,datalen));
+      std::string title((const char*)(buf+data),safe_len((const char*)buf+data,datalen));
       if(title.size()>60)title=title.substr(0,60);
       if(!title.empty())return title;
     }
@@ -149,7 +150,12 @@ static void scan(){
     games.push_back(g);
   }
   closedir(d);
-  std::sort(games.begin(),games.end(),[](const Game&a,const Game&b){return a.name<b.name;});
+  // Simple insertion sort avoids pulling unsupported libc++ threading helpers.
+  for(size_t i=1;i<games.size();i++){
+    Game tmp=games[i];size_t j=i;
+    while(j>0 && tmp.name<games[j-1].name){games[j]=games[j-1];--j;}
+    games[j]=tmp;
+  }
   int candidates=0;
   for(const auto& g:games) if(g.app.state==BROKEN_CANDIDATE || g.patch.state==BROKEN_CANDIDATE)candidates++;
   char m[220];snprintf(m,sizeof(m),"%d jogos | %d HDs | %d com links suspeitos",
@@ -199,7 +205,7 @@ static void draw(SDL_Renderer* r){
     const int shown=12;
     int start=selected-(shown/2);
     if(start<0)start=0;
-    if(start>int(games.size())-shown)start=std::max(0,int(games.size())-shown);
+    if(start>int(games.size())-shown)start=(int(games.size())-shown>0?int(games.size())-shown:0);
     for(int i=start;i<int(games.size()) && i<start+shown;i++){
       int y=184+(i-start)*36;
       const Game& g=games[i];
