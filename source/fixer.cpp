@@ -1,3 +1,4 @@
+#ifndef USB_FIXER_PS4
 #include "fixer.h"
 #include "path_match.h"
 #include <sys/stat.h>
@@ -145,3 +146,5 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
  explain(out,std::string("REPARADO: ")+tid+" / "+localname(type),log);
  return true;
 }
+
+#endif // PS4 uses native libkernel backend in fixer_ps4.cpp
