@@ -318,8 +318,9 @@ int main(){
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
   logline("USB Link Fixer v0.4: confirmation-required repair, no PKG movement.");
-  scan();
-  notify("USB Link Fixer 0.4: escolha jogo. Quadrado: reparar / R1: executar.");
+  // Initialize video BEFORE accessing USB disks or reading game metadata.
+  // This avoids a long filesystem scan looking like an app that never opened.
+  notify("USB Link Fixer: iniciando interface...");
   if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK)!=0){
     logline("SDL init failed: %s",SDL_GetError());
     notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
@@ -335,6 +336,14 @@ int main(){
   if(SDL_NumJoysticks()>0)joystick=SDL_JoystickOpen(0);
   logline("CONTROL: SDL joysticks=%d raw_joystick_open=%d",
           SDL_NumJoysticks(),(int)(joystick!=nullptr));
+  // Display a real first frame while game scanning runs synchronously.
+  draw(r);
+  SDL_RenderPresent(r);
+  SDL_UpdateWindowSurface(w);
+  logline("STARTUP: SDL window and first frame initialized");
+  scan();
+  logline("STARTUP: game scan completed");
+  notify("USB Link Fixer: interface carregada; selecione um jogo.");
   bool running=true;
   while(running){
     SDL_Event e;
