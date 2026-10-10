@@ -255,13 +255,15 @@ int main(){
   scan();
   notify("USB Link Fixer 0.2: diagnostico concluido, sem alterar arquivos.");
   if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK|SDL_INIT_GAMECONTROLLER)!=0){
-    logline("SDL init failed: %s",SDL_GetError());return 2;
+    logline("SDL init failed: %s",SDL_GetError());
+    notify("USB Link Fixer: falha ao iniciar video. Veja o log.");
+    sceKernelUsleep(3500000);if(logFile)fclose(logFile);return 2;
   }
   SDL_Window* w=SDL_CreateWindow("PS4 USB Link Fixer",SDL_WINDOWPOS_UNDEFINED,SDL_WINDOWPOS_UNDEFINED,W,H,0);
-  if(!w){logline("Window failed: %s",SDL_GetError());SDL_Quit();return 3;}
+  if(!w){logline("Window failed: %s",SDL_GetError());notify("USB Link Fixer: falha ao criar janela.");sceKernelUsleep(3500000);SDL_Quit();if(logFile)fclose(logFile);return 3;}
   SDL_Surface* surf=SDL_GetWindowSurface(w);
   SDL_Renderer* r=surf?SDL_CreateSoftwareRenderer(surf):nullptr;
-  if(!r){logline("Renderer failed: %s",SDL_GetError());SDL_DestroyWindow(w);SDL_Quit();return 4;}
+  if(!r){logline("Renderer failed: %s",SDL_GetError());notify("USB Link Fixer: falha ao criar video.");sceKernelUsleep(3500000);SDL_DestroyWindow(w);SDL_Quit();if(logFile)fclose(logFile);return 4;}
   SDL_GameController* controller=nullptr;
   if(SDL_NumJoysticks()>0 && SDL_IsGameController(0))
     controller=SDL_GameControllerOpen(0);
