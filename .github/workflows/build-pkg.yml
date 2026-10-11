@@ -116,4 +116,5 @@ jobs:
           path: |
             PS4-USB-Link-Fixer.pkg
             PS4-USB-Link-Fixer.pkg.sha256
+            sce_sys/icon0.png
           if-no-files-found: error
