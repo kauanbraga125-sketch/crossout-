@@ -38,14 +38,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends clang-18 lld-18
 
-      - name: Generate custom 512x512 RGB menu icon
+      - name: Render sharp vector menu icon in native PS4 resolution
         run: |
           set -euxo pipefail
-          sudo apt-get install -y --no-install-recommends imagemagick
+          sudo apt-get install -y --no-install-recommends imagemagick fonts-dejavu-core python3-cairosvg
           mkdir -p sce_sys
-          base64 --decode assets/icon-cover.jpg.base64 > /tmp/usbfix-cover.jpg
-          identify /tmp/usbfix-cover.jpg
-          convert /tmp/usbfix-cover.jpg -resize 512x512! -strip -alpha off -type TrueColor PNG24:sce_sys/icon0.png
+          # Rasterize scalable SVG at 4x resolution, then supersample to 512.
+          /usr/bin/python3 -c 'import cairosvg; cairosvg.svg2png(url="assets/icon-cover.svg", write_to="/tmp/usbfix-icon-2048.png", output_width=2048, output_height=2048)'
+          convert /tmp/usbfix-icon-2048.png -filter Lanczos -resize 512x512 -background '#06122c' -alpha remove -alpha off -strip -type TrueColor PNG24:sce_sys/icon0.png
           identify -format "%m %wx%h %[channels]\\n" sce_sys/icon0.png
           test -s sce_sys/icon0.png
 
