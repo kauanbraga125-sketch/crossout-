@@ -21,7 +21,7 @@
 #include "native_catalog.h"
 #include "ps4_link_io.h"
 
-// PS4 USB Link Fixer 1.1: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 1.2: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -37,12 +37,26 @@ struct Link {
 };
 struct Game {
   std::string id, name;
+  bool isApp=false;
   Link app, patch, dlc;
   unsigned sources=0, usb_mask=0;
 };
 std::vector<Game> games;
-std::string message="Analisando os HDs...";
 int selected=0;
+int filterMode=0; // L1 cycles ALL (0), GAMES (1), APPS (2).
+std::vector<int> visible;
+static bool show_game(const Game& g){
+ return filterMode==0 || (filterMode==1 && !g.isApp) ||
+        (filterMode==2 && g.isApp);
+}
+static void build_visible(){
+ visible.clear();
+ for(size_t i=0;i<games.size();i++)if(show_game(games[i]))visible.push_back((int)i);
+ if(visible.empty()){selected=0;return;}
+ for(int i:visible)if(i==selected)return;
+ selected=visible[0];
+}
+std::string message="Analisando os HDs...";
 bool details=false;
 int confirmation=0; // 0 none, 1 repair, 2 repair+launch
 bool resultVisible=false;
@@ -152,6 +166,7 @@ static void scan(){
   for(size_t i=0;i<entries.size();i++){
     Game g;
     g.id=entries[i].id;
+    g.isApp=g.id.compare(0,4,"CUSA")!=0;
     g.sources=entries[i].sources;
     g.usb_mask=entries[i].usb_mask;
     g.name=read_title(g.id);
@@ -170,6 +185,7 @@ static void scan(){
     while(j>0 && tmp.name<games[j-1].name){games[j]=games[j-1];--j;}
     games[j]=tmp;
   }
+  build_visible();
   int candidates=0;
   for(const auto& g:games)if(g.app.state==BROKEN_CANDIDATE ||
      g.patch.state==BROKEN_CANDIDATE || g.dlc.state==BROKEN_CANDIDATE)candidates++;
@@ -177,6 +193,9 @@ static void scan(){
   snprintf(line,sizeof(line),"Jogos: %u | HDs Itemzflow: %d | links suspeitos: %d",
     (unsigned)games.size(),usbCount,candidates);
   message=line;
+  int numApps=0;
+  for(const Game& g:games)if(g.isApp)numApps++;
+  logline("CATALOG: games=%d homebrew_apps=%d", (int)games.size()-numApps,numApps);
   snprintf(line,sizeof(line),"/user/app: %d (errno=%d)  appmeta: %d  ext0: %d  HD jogos: %d",
     catalogInfo.internal,catalogInfo.internal_errno,catalogInfo.appmeta,catalogInfo.ext0,usbGames);
   catalogStatus=line;
@@ -223,24 +242,35 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v1.1 - BACKUP NOVO + FALLBACK USB1",1,C(194,214,237));
+  label(r,49,75,"v1.2 - JOGOS + APPS | CAPA HD",1,C(194,214,237));
   label(r,50,117,message,2,C(211,222,241),66);
   label(r,50,156,catalogStatus,1,C(244,196,125),130);
   label(r,50,179,goldhenStatus,1,C(134,224,244),135);
-  if(games.empty()){
-    label(r,95,310,"Nenhum CUSA visivel. Leia o diagnostico acima.",2,C(234,214,180),59);
+  int appTotal=0;
+  for(const Game& g:games)if(g.isApp)appTotal++;
+  char tabs[145];
+  snprintf(tabs,sizeof(tabs),"L1 CATEGORIA: %s  |  JOGOS %d  |  APPS %d",
+           filterMode==0?"TODOS":(filterMode==1?"JOGOS":"APLICATIVOS"),
+           (int)games.size()-appTotal,appTotal);
+  label(r,49,198,tabs,1,C(123,210,247),130);
+  if(visible.empty()){
+    label(r,95,310,"Nenhum titulo nessa categoria. Pressione L1.",2,C(234,214,180),70);
   }else{
-    const int shown=12;
-    int start=selected-(shown/2);
+    const int shown=10;
+    int selectedPos=0;
+    for(size_t i=0;i<visible.size();i++)if(visible[i]==selected){selectedPos=(int)i;break;}
+    int start=selectedPos-(shown/2);
     if(start<0)start=0;
-    if(start>int(games.size())-shown)start=(int(games.size())-shown>0?int(games.size())-shown:0);
-    for(int i=start;i<int(games.size()) && i<start+shown;i++){
-      int y=200+(i-start)*36;
-      const Game& g=games[i];
-      if(i==selected)fill(r,35,y-7,1210,34,C(42,78,116));
+    if(start>(int)visible.size()-shown)start=((int)visible.size()>shown?(int)visible.size()-shown:0);
+    for(int i=start;i<(int)visible.size() && i<start+shown;i++){
+      int y=235+(i-start)*39;
+      const Game& g=games[visible[i]];
+      if(visible[i]==selected)fill(r,35,y-7,1210,37,C(42,78,116));
       label(r,48,y,g.id,2,C(154,197,237),10);
-      label(r,235,y,shorten(g.name,41),2,C(235,241,248),43);
-      label(r,930,y,shorten(detail_state(g.app),19),1,status_color(g.app.state),19);
+      label(r,235,y,shorten(g.name,37),2,C(235,241,248),39);
+      label(r,885,y,g.isApp?"APP":"JOGO",1,
+              g.isApp?C(123,239,212):C(180,210,240),6);
+      label(r,958,y,shorten(detail_state(g.app),18),1,status_color(g.app.state),19);
     }
   }
   if(details&&!games.empty()){
@@ -248,7 +278,7 @@ static void draw(SDL_Renderer* r){
     fill(r,70,212,1140,320,C(28,42,61));
     fill(r,70,212,1140,6,C(81,150,218));
     label(r,94,237,shorten(g.name,45),2,C(250,251,254),46);
-    label(r,94,277,g.id+"   JOGO: "+detail_state(g.app),2,status_color(g.app.state),55);
+    label(r,94,277,g.id+(g.isApp?"   APP: ":"   JOGO: ")+detail_state(g.app),2,status_color(g.app.state),55);
     label(r,94,317,"ATUAL: "+shorten(g.app.old_target,74),1,C(211,223,239),100);
     label(r,94,339,"LOCALIZADO: "+shorten(g.app.proposed,74),1,C(211,223,239),100);
     label(r,94,377,"ATUALIZACAO: "+detail_state(g.patch),2,status_color(g.patch.state),55);
@@ -286,17 +316,28 @@ static void draw(SDL_Renderer* r){
   }
   fill(r,0,654,W,66,C(22,36,55));
   label(r,40,663,"CIMA/BAIXO: selecionar | X: detalhes/confirmar | O: voltar",1,C(207,222,237),90);
-  label(r,40,683,"QUADRADO: reparar | R1: executar | TRIANGULO: acesso GoldHEN",1,C(207,222,237),90);
+  label(r,40,683,"L1: categorias | QUADRADO: reparar | R1: executar | TRIANGULO: GoldHEN",1,C(207,222,237),90);
 }
 static void nav(int change){
- if(games.empty()||confirmation)return;
- selected+=change;
- if(selected<0)selected=0;
- if(selected>=(int)games.size())selected=(int)games.size()-1;
+ if(visible.empty()||confirmation)return;
+ int pos=0;
+ for(size_t i=0;i<visible.size();i++)if(visible[i]==selected){pos=(int)i;break;}
+ pos+=change;
+ if(pos<0)pos=0;
+ if(pos>=(int)visible.size())pos=(int)visible.size()-1;
+ selected=visible[pos];
  details=false;
 }
+static void cycle_filter(){
+ filterMode=(filterMode+1)%3;
+ build_visible();
+ details=false;confirmation=0;resultVisible=false;
+ message=filterMode==0?"Exibindo jogos e aplicativos":
+         (filterMode==1?"Exibindo apenas jogos":"Exibindo apenas aplicativos");
+}
+
 static bool launch_current(){
- if(games.empty())return false;
+ if(games.empty()||visible.empty())return false;
  std::string tid=games[selected].id,reason;
  FixLink base=fix_inspect("",tid,FIX_GAME);
  FixLink patch=fix_inspect("",tid,FIX_UPDATE);
@@ -312,7 +353,7 @@ static bool launch_current(){
  return err>=0;
 }
 static void repair_selected(bool then_launch){
- if(games.empty())return;
+ if(games.empty()||visible.empty())return;
  const std::string tid=games[selected].id;
  repairResult.clear();
  repairResult.push_back("CUSA: "+tid+" - "+games[selected].name);
@@ -363,7 +404,7 @@ static void repair_selected(bool then_launch){
 }
 
 static bool has_candidates(){
- if(games.empty())return false;
+ if(games.empty()||visible.empty())return false;
  const std::string& id=games[selected].id;
  return fix_inspect("",id,FIX_GAME).status==FIX_CANDIDATE ||
         fix_inspect("",id,FIX_UPDATE).status==FIX_CANDIDATE ||
@@ -379,7 +420,8 @@ static void handle(int code,bool& running){
    else if(code==5)confirmation=0;
    return;
  }
- if(code==1)nav(-1);
+ if(code==8)cycle_filter();
+ else if(code==1)nav(-1);
  else if(code==2)nav(1);
  else if(code==3)details=!details;
  else if(code==4){
@@ -417,7 +459,7 @@ int main(){
   // Do not create the legacy 0700 backup dir under restricted pre-GoldHEN credentials.
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v1.1: verified backup before guarded repair repair, no PKG movement.");
+  logline("USB Link Fixer v1.2: verified backup before guarded repair repair, no PKG movement.");
   usbfix_io::set_authorized(false);
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
@@ -461,6 +503,7 @@ int main(){
         else if(e.jbutton.button==2)handle(6,running);
         else if(e.jbutton.button==3)handle(4,running);
         else if(e.jbutton.button==5)handle(7,running);
+        else if(e.jbutton.button==4)handle(8,running);
         else if(e.jbutton.button==11 || e.jbutton.button==15)handle(1,running);
         else if(e.jbutton.button==12 || e.jbutton.button==16)handle(2,running);
       }else if(e.type==SDL_JOYHATMOTION){
@@ -472,6 +515,7 @@ int main(){
           case SDLK_DOWN:handle(2,running);break;
           case SDLK_RETURN:handle(3,running);break;
           case SDLK_r:handle(4,running);break;
+          case SDLK_TAB:handle(8,running);break;
           case SDLK_F5:handle(6,running);break;
           case SDLK_F6:handle(7,running);break;
           case SDLK_ESCAPE:handle(5,running);break;
