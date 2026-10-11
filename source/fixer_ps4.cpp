@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <vector>
 
 static const char* localdir(FixType t){
  return t==FIX_GAME?"app":t==FIX_UPDATE?"patch":"addcont";
@@ -114,26 +115,57 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
     usbfix_same_path(l.old_target.c_str(),l.new_target.c_str())){
    record(log,out,"BLOQUEADO: link sem destino verificavel");return false;
  }
- const std::string dir=root+"/data/USBLinkFixer";
- int e=usbfix_io::make_dir(dir);
- if(e){
-   record(log,out,"BLOQUEADO: sem permissao para pasta de backup errno="+std::to_string(e));
+ // A legacy /data/USBLinkFixer folder may be owned by the restricted
+ // title identity because older builds created it BEFORE GoldHEN access.
+ // Never chmod, delete, or overwrite that directory. First try a fresh,
+ // separate internal directory created AFTER the access request.
+ std::vector<std::string> roots;
+ roots.push_back(root+"/data/ULFX00001-Backups");
+ roots.push_back(root+"/data/USBLinkFixer-Recovery-v11");
+ // Last fallback: a dedicated metadata-only backup directory on the USB
+ // holding the valid replacement PKG. Never write backups onto USB0.
+ const std::string prefix=root+"/mnt/usb";
+ if(l.new_target.compare(0,prefix.size(),prefix)==0 &&
+    l.new_target.size()>prefix.size()+1){
+   const char digit=l.new_target[prefix.size()];
+   if(digit>='1' && digit<='7' &&
+      l.new_target[prefix.size()+1]=='/'){
+     roots.push_back(prefix+digit+"/USBLinkFixerBackups");
+   }
+ }
+ bool backedUp=false;
+ std::string backupPath;
+ std::string errors;
+ const std::string content=l.internal+"\\n"+l.old_target+"\\n"+l.new_target+"\\n";
+ for(const std::string& dir:roots){
+   int e=usbfix_io::make_dir(dir);
+   if(e){
+     errors+=dir+" mkdir="+std::to_string(e)+"; ";
+     continue;
+   }
+   // Exclusive create; never reuse an existing name or replace an old backup.
+   for(unsigned i=0;i<1024;i++){
+     char suffix[32];
+     snprintf(suffix,sizeof(suffix),"-%d-%04u.original.txt",(int)type,i);
+     const std::string p=dir+"/"+tid+suffix;
+     e=usbfix_io::create_exclusive_backup(p,content);
+     if(e==EEXIST)continue;
+     if(e){
+       errors+=dir+" "+usbfix_io::backup_error_step()+"="+std::to_string(e)+"; ";
+       break;
+     }
+     backedUp=true;
+     backupPath=p;
+     if(log){fprintf(log,"BACKUP VERIFIED: %s\\n",p.c_str());fflush(log);}
+     break;
+   }
+   if(backedUp)break;
+ }
+ if(!backedUp){
+   record(log,out,"BLOQUEADO: sem backup gravavel/confirmado. "+
+         (errors.empty()?std::string("locais lotados"):errors));
    return false;
  }
- // A verified, unique write-once recovery record must exist first.
- bool backedUp=false;
- for(unsigned i=0;i<1024;i++){
-   char suffix[32];snprintf(suffix,sizeof(suffix),"-%d-%04u.original.txt",(int)type,i);
-   const std::string p=dir+"/"+tid+suffix;
-   const std::string content=l.internal+"\n"+l.old_target+"\n"+l.new_target+"\n";
-   e=usbfix_io::create_exclusive_backup(p,content);
-   if(e==EEXIST)continue;
-   if(e){record(log,out,"BLOQUEADO: falha salvando backup errno="+std::to_string(e));return false;}
-   backedUp=true;
-   if(log){fprintf(log,"BACKUP: %s\n",p.c_str());fflush(log);}
-   break;
- }
- if(!backedUp){record(log,out,"BLOQUEADO: sem espaco de backup");return false;}
  // Verify USB ordering and original exact link bytes again before writing.
  const FixLink again=fix_inspect(root,tid,type);
  if(again.status!=FIX_CANDIDATE || again.matches!=1 ||
@@ -163,7 +195,8 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
                       "FALHA VERIFICACAO: link original restaurado");
    return false;
  }
- record(log,out,std::string("REPARADO E VERIFICADO: ")+tid+" "+localname(type));
+ record(log,out,std::string("REPARADO E VERIFICADO: ")+tid+" "+localname(type)+
+         " BACKUP="+backupPath);
  return true;
 }
 #endif
