@@ -9,6 +9,7 @@
 
 static int failures=0, passes=0, changes=0;
 static bool allow=false, fail_backup=false, fail_create=false, fail_rename=false;
+static bool fail_internal_data=false, fail_usb_backups=false;
 static std::map<std::string,std::string> links,backups;
 static std::set<std::string> files;
 static void check(bool yes,const char* what){
@@ -20,6 +21,7 @@ static std::string disk(int num,const std::string& id){
  return "/mnt/usb"+std::to_string(num)+"/itemzflow/apps/"+id+"/app.pkg";
 }
 static void reset(){allow=false;fail_backup=false;fail_create=false;fail_rename=false;
+ fail_internal_data=false;fail_usb_backups=false;
  links.clear();backups.clear();files.clear();changes=0;}
 namespace usbfix_io{
 void set_authorized(bool value){allow=value;}
@@ -44,9 +46,17 @@ int regular_file(const std::string& path,uint64_t* size){
  if(files.count(p)){if(size)*size=8192;return 0;}
  return ENOENT;
 }
-int make_dir(const std::string&){return fail_backup?EACCES:0;}
+int make_dir(const std::string& path){
+ if(fail_backup)return EACCES;
+ if(fail_internal_data && path.find("/data/")==0)return EACCES;
+ if(fail_usb_backups && path.find("/mnt/usb1/USBLinkFixerBackups")!=std::string::npos)return EACCES;
+ return 0;
+}
+const char* backup_error_step(){return "open";}
 int create_exclusive_backup(const std::string& path,const std::string& s){
  if(fail_backup)return EACCES;
+ if(fail_internal_data && path.find("/data/")==0)return EACCES;
+ if(fail_usb_backups && path.find("/mnt/usb1/USBLinkFixerBackups")!=std::string::npos)return EACCES;
  if(backups.count(path))return EEXIST;
  backups[path]=s;return 0;
 }
@@ -114,6 +124,26 @@ int main(){
  fail_create=false;fail_rename=true;
  check(!fix_repair("",id,FIX_GAME,&result,nullptr)&&links[in]==disk(0,id),
        "rename failure preserves original link");
+ // v1.1 regression: new backup directory is not the old, restricted one.
+ reset();usbfix_io::set_authorized(true);
+ links[in]=disk(0,id);files.insert(disk(1,id));
+ check(fix_repair("",id,FIX_GAME,&result,nullptr),"fresh app-owned /data recovery dir permits repair");
+ check(backups.size()==1 &&
+       backups.begin()->first.find("/data/ULFX00001-Backups/")==0,
+       "v1.1 never chooses the legacy restricted folder");
+ // A USB1-local text recovery record is permitted only if /data is denied.
+ reset();usbfix_io::set_authorized(true);
+ links[in]=disk(0,id);files.insert(disk(1,id));fail_internal_data=true;
+ check(fix_repair("",id,FIX_GAME,&result,nullptr),"fallback repair works with /data blocked but USB1 backup writable");
+ check(backups.size()==1 &&
+       backups.begin()->first.find("/mnt/usb1/USBLinkFixerBackups/")==0,
+       "fallback writes backup only on target USB1, never USB0");
+ // If NO backup location is writable, prohibit ALL link mutations.
+ reset();usbfix_io::set_authorized(true);
+ links[in]=disk(0,id);files.insert(disk(1,id));
+ fail_internal_data=true;fail_usb_backups=true;
+ check(!fix_repair("",id,FIX_GAME,&result,nullptr) && links[in]==disk(0,id) && changes==0,
+       "no writable /data or USB1 backup means no mutation");
  printf("PS4 BACKEND RESULT: %d passes, %d failures\n",passes,failures);
  return failures?1:0;
 }
