@@ -11,6 +11,7 @@ int read_link(const std::string& path,std::string* target);
 int regular_file(const std::string& path,uint64_t* size);
 int make_dir(const std::string& path);
 int create_exclusive_backup(const std::string& path,const std::string& content);
+const char* backup_error_step(); // open/write/fsync/close/verify for diagnostics
 int create_link(const std::string& target,const std::string& path);
 int rename_file(const std::string& from,const std::string& to);
 int remove_file(const std::string& path);
