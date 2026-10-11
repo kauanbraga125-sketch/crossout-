@@ -132,8 +132,10 @@ static size_t safe_len(const char* s,size_t limit){size_t k=0;while(k<limit&&s[k
 static std::string read_title(const std::string& id){
   char p[340];
   const char* fmt[]={"/system_data/priv/appmeta/%s/param.sfo",
-                     "/user/app/%s/sce_sys/param.sfo"};
-  for(int pi=0;pi<2;pi++){
+                     "/user/app/%s/sce_sys/param.sfo",
+                     "/user/appmeta/%s/param.sfo",
+                     "/user/appmeta/%s/sce_sys/param.sfo"};
+  for(int pi=0;pi<4;pi++){
     snprintf(p,sizeof(p),fmt[pi],id.c_str());
     FILE* f=fopen(p,"rb");if(!f)continue;
     unsigned char buf[16384];size_t len=fread(buf,1,sizeof(buf),f);fclose(f);
