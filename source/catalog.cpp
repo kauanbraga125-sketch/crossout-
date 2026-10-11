@@ -37,6 +37,10 @@ static int scan_dir(const std::string& path,unsigned source,unsigned bit,
     const std::string name=ent->d_name;
     if(!valid_title_id(name.c_str()))continue;
 #endif
+    // Metadata alone is not evidence that a homebrew app is installed.
+    // Homebrew items must appear under /user/app, /mnt/ext0 or a USB root.
+    if((source==CAT_APPMETA || source==CAT_SYSTEM_META) &&
+       name.compare(0,4,"CUSA")!=0)continue;
     seen++;
     bool found=false;
     for(size_t i=0;i<games->size();i++){
@@ -66,6 +70,7 @@ void usbfix_collect_games(const std::string& root,
  info->internal=scan_dir(root+"/user/app",CAT_INTERNAL,0,result);
  if(info->internal<0)info->internal_errno=-info->internal;
  info->ext0=scan_dir(root+"/mnt/ext0/user/app",CAT_EXT0,0,result);
+ scan_dir(root+"/mnt/ext1/user/app",CAT_EXT0,0,result);
  info->appmeta=scan_dir(root+"/user/appmeta",CAT_APPMETA,0,result);
  info->systemmeta=scan_dir(root+"/system_data/priv/appmeta",CAT_SYSTEM_META,0,result);
  for(int i=0;i<8;i++){
