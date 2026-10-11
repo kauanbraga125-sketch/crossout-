@@ -21,7 +21,7 @@
 #include "native_catalog.h"
 #include "ps4_link_io.h"
 
-// PS4 USB Link Fixer 1.0: guarded Itemzflow symlink repair plus launch.
+// PS4 USB Link Fixer 1.1: guarded Itemzflow symlink repair plus launch.
 // Refer to Itemzflow GLES2_itemzflow.cpp for the real Itemzflow file layout.
 
 namespace {
@@ -223,7 +223,7 @@ static void draw(SDL_Renderer* r){
   fill(r,0,0,W,H,C(10,17,30));
   fill(r,0,0,W,107,C(23,47,79));
   label(r,48,35,"PS4 USB LINK FIXER",3,C(239,246,254));
-  label(r,49,75,"v1.0 - REPARO COM RELATORIO DE ERROS",1,C(194,214,237));
+  label(r,49,75,"v1.1 - BACKUP NOVO + FALLBACK USB1",1,C(194,214,237));
   label(r,50,117,message,2,C(211,222,241),66);
   label(r,50,156,catalogStatus,1,C(244,196,125),130);
   label(r,50,179,goldhenStatus,1,C(134,224,244),135);
@@ -349,7 +349,7 @@ static void repair_selected(bool then_launch){
  repairResult.insert(repairResult.begin()+1,summary);
  repairResult.push_back("DEPOIS: JOGO="+std::string(fix_status((FixState)g.app.state))+
    " errno="+std::to_string(g.app.err));
- repairResult.push_back("BACKUP: /data/USBLinkFixer/ (quando criado)");
+ repairResult.push_back("BACKUP: caminho exato indicado na linha do reparo, se criado");
  repairResult.push_back("USB0 preservado; nenhum arquivo PKG foi movido.");
  repairResult.push_back("Se falhou, envie uma foto deste relatorio.");
  message=std::string(summary)+" | "+tid;
@@ -414,10 +414,10 @@ static void handle(int code,bool& running){
 
 }
 int main(){
-  mkdir("/data/USBLinkFixer",0700);
+  // Do not create the legacy 0700 backup dir under restricted pre-GoldHEN credentials.
   logFile=fopen("/data/USBLinkFixer/scan.txt","wb");
   if(!logFile)logFile=fopen("/data/USBLinkFixer-scan.txt","wb");
-  logline("USB Link Fixer v1.0: confirmation-required repair, no PKG movement.");
+  logline("USB Link Fixer v1.1: verified backup before guarded repair repair, no PKG movement.");
   usbfix_io::set_authorized(false);
   // Initialize video BEFORE accessing USB disks or reading game metadata.
   // This avoids a long filesystem scan looking like an app that never opened.
