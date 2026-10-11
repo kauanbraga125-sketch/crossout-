@@ -136,7 +136,7 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
  bool backedUp=false;
  std::string backupPath;
  std::string errors;
- const std::string content=l.internal+"\\n"+l.old_target+"\\n"+l.new_target+"\\n";
+ const std::string content=l.internal+"\n"+l.old_target+"\n"+l.new_target+"\n";
  for(const std::string& dir:roots){
    int e=usbfix_io::make_dir(dir);
    if(e){
@@ -156,7 +156,7 @@ bool fix_repair(const std::string& root,const std::string& tid,FixType type,
      }
      backedUp=true;
      backupPath=p;
-     if(log){fprintf(log,"BACKUP VERIFIED: %s\\n",p.c_str());fflush(log);}
+     if(log){fprintf(log,"BACKUP VERIFIED: %s\n",p.c_str());fflush(log);}
      break;
    }
    if(backedUp)break;
