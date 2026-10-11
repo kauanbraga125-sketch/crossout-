@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<defs>
+  <radialGradient id="bg"><stop stop-color="#10376c"/><stop offset=".54" stop-color="#061a3e"/><stop offset="1" stop-color="#020a1e"/></radialGradient>
+  <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a6ffff"/><stop offset=".45" stop-color="#12bfff"/><stop offset="1" stop-color="#335ffb"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#5c83aa"/><stop offset=".16" stop-color="#182e50"/><stop offset=".7" stop-color="#101c31"/><stop offset="1" stop-color="#4b6a9c"/></linearGradient>
+  <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#122e58"/><stop offset="1" stop-color="#051329"/></linearGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="13"/></filter>
+  <filter id="sh" x="-30%" y="-30%" width="160%" height="180%"><feGaussianBlur stdDeviation="7"/></filter>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<path d="M0 790 Q512 640 1024 790 M0 840 Q512 690 1024 840 M0 900 Q512 760 1024 900" fill="none" stroke="#0d58ae" opacity=".24" stroke-width="4"/>
+<circle cx="512" cy="392" r="300" fill="none" stroke="#1b7ff2" stroke-width="2" opacity=".17"/>
+<circle cx="512" cy="392" r="234" fill="#0184e6" opacity=".18" filter="url(#glow)"/>
+<circle cx="512" cy="392" r="207" fill="url(#panel)" stroke="#12457b" stroke-width="5"/>
+<!-- Two crisp external-drive symbols, with refined metallic outlines -->
+<g>
+  <rect x="101" y="239" width="170" height="300" rx="23" fill="#00132e" opacity=".75" filter="url(#sh)"/>
+  <rect x="101" y="221" width="170" height="300" rx="23" fill="url(#metal)" stroke="#84c9ff" stroke-width="6"/>
+  <rect x="121" y="243" width="131" height="221" rx="11" fill="#091b32" stroke="#597da7" stroke-width="2"/>
+  <path d="M134 281 H239" stroke="#2a4d74" stroke-width="2"/><path d="M134 292 H239" stroke="#284467" stroke-width="2"/>
+  <rect x="177" y="438" width="18" height="32" rx="6" fill="#52dafe" filter="url(#glow)"/>
+  <rect x="177" y="438" width="18" height="32" rx="6" fill="#5ff8ff"/>
+  <circle cx="186" cy="497" r="6" fill="#9afaff"/>
+</g>
+<g>
+  <rect x="753" y="239" width="170" height="300" rx="23" fill="#00132e" opacity=".75" filter="url(#sh)"/>
+  <rect x="753" y="221" width="170" height="300" rx="23" fill="url(#metal)" stroke="#84c9ff" stroke-width="6"/>
+  <rect x="773" y="243" width="131" height="221" rx="11" fill="#091b32" stroke="#597da7" stroke-width="2"/>
+  <path d="M783 281 H889 M783 292 H889" stroke="#31547d" stroke-width="2"/>
+  <rect x="829" y="438" width="18" height="32" rx="6" fill="#52dafe" filter="url(#glow)"/>
+  <rect x="829" y="438" width="18" height="32" rx="6" fill="#5ff8ff"/>
+  <circle cx="838" cy="497" r="6" fill="#9afaff"/>
+</g>
+<!-- Crisp interconnected circular arrows -->
+<path d="M353 315 A177 177 0 0 1 673 306" stroke="#15bffe" stroke-width="39" stroke-linecap="round" fill="none" filter="url(#glow)" opacity=".75"/>
+<path d="M353 315 A177 177 0 0 1 673 306" stroke="url(#cyan)" stroke-width="33" stroke-linecap="round" fill="none"/>
+<path d="M667 236 L704 333 L605 323 Z" fill="#70ecff" stroke="#d8ffff" stroke-width="5" stroke-linejoin="round"/>
+<path d="M670 473 A177 177 0 0 1 350 476" stroke="#15bffe" stroke-width="39" stroke-linecap="round" fill="none" filter="url(#glow)" opacity=".75"/>
+<path d="M670 473 A177 177 0 0 1 350 476" stroke="url(#cyan)" stroke-width="33" stroke-linecap="round" fill="none"/>
+<path d="M354 541 L318 447 L415 455 Z" fill="#70ecff" stroke="#d8ffff" stroke-width="5" stroke-linejoin="round"/>
+<!-- Central link-and-console pictogram -->
+<g fill="none" stroke="#b5efff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round">
+<rect x="433" y="356" width="102" height="65" rx="32" transform="rotate(-31 484 389)"/>
+<rect x="491" y="358" width="102" height="65" rx="32" transform="rotate(-31 542 391)"/>
+<path d="M483 405 L540 371"/>
+</g>
+<rect x="58" y="659" width="908" height="242" rx="37" fill="#061a39" stroke="#2c6cb2" stroke-width="5"/>
+<text x="512" y="760" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="88" fill="#e6fbff" text-anchor="middle" letter-spacing="4">USB LINK</text>
+<text x="512" y="859" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="90" fill="#37cffe" text-anchor="middle" letter-spacing="5">FIXER</text>
+<path d="M102 934 H387 M637 934 H922" stroke="#2b99dc" stroke-width="7" stroke-linecap="round" opacity=".66"/>
+<text x="512" y="950" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="24" fill="#9fdafc" text-anchor="middle" letter-spacing="4">PS4 UTILITY</text>
+</svg>
