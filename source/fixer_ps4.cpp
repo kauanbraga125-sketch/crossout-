@@ -25,6 +25,9 @@ bool fix_valid_id(const std::string& t){
    if(c>='A'&&c<='Z')hasLetter=true;
    else if(c<'0'||c>'9')return false;
  }
+ if(t.compare(0,4,"CUSA")==0){
+   for(int i=4;i<9;i++)if(t[i]<'0'||t[i]>'9')return false;
+ }
  return hasLetter;
 }
 const char* fix_status(FixState s){
