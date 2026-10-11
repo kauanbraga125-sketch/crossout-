@@ -18,9 +18,14 @@ static const char* usbname(FixType t){
  return t==FIX_GAME?"app.pkg":t==FIX_UPDATE?"app_patch.pkg":"app_dlc.pkg";
 }
 bool fix_valid_id(const std::string& t){
- if(t.size()!=9||t.compare(0,4,"CUSA"))return false;
- for(int i=4;i<9;i++)if(t[i]<'0'||t[i]>'9')return false;
- return true;
+ if(t.size()!=9)return false;
+ bool hasLetter=false;
+ for(int i=0;i<9;i++){
+   const char c=t[i];
+   if(c>='A'&&c<='Z')hasLetter=true;
+   else if(c<'0'||c>'9')return false;
+ }
+ return hasLetter;
 }
 const char* fix_status(FixState s){
  switch(s){
