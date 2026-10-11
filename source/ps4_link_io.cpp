@@ -9,6 +9,7 @@
 
 namespace {
 bool g_authorized=false;
+const char* g_backup_step="not-started";
 static int errcode(int64_t value) {
   uint32_t bits=(uint32_t)value;
   if((bits&0xffff0000u)==0x80020000u)return (int)(bits&0xffffu);
@@ -85,24 +86,52 @@ int make_dir(const std::string& path){
  int e=errcode(rc);
  return e==EEXIST?0:e;
 }
+const char* backup_error_step(){return g_backup_step;}
 int create_exclusive_backup(const std::string& path,const std::string& content){
+ g_backup_step="open";
  int fd=sceKernelOpen(path.c_str(),O_WRONLY|O_CREAT|O_EXCL,0600);
  if(fd<0)return errcode(fd);
  int e=0;
  size_t at=0;
+ g_backup_step="write";
  while(at<content.size()){
    int64_t n=(int64_t)sceKernelWrite(fd,content.data()+at,content.size()-at);
    if(n<0){e=errcode(n);break;}
    if(n==0 || (size_t)n>content.size()-at){e=EIO;break;}
    at+=(size_t)n;
  }
- if(!e)e=errcode(sceKernelFsync(fd));
- int ce=close_status(fd);
- if(!e)e=ce;
- // An incomplete exclusive record is not a valid backup. Leave it in place to
- // prevent another attempt overwriting an uncertain history.
+ if(!e){g_backup_step="fsync";e=errcode(sceKernelFsync(fd));}
+ g_backup_step=e?g_backup_step:"close";
+ const int closeError=close_status(fd);
+ if(!e)e=closeError;
+ // No link can be changed until the saved bytes have been read back.
+ if(e)return e; // Preserve incomplete file so it cannot be overwritten.
+ g_backup_step="verify-open";
+ fd=sceKernelOpen(path.c_str(),O_RDONLY,0);
+ if(fd<0)return errcode(fd);
+ char buffer[512];
+ if(content.size()>=sizeof(buffer)){sceKernelClose(fd);return EFBIG;}
+ g_backup_step="verify-read";
+ size_t got=0;
+ while(got<content.size()){
+   int64_t n=(int64_t)sceKernelRead(fd,buffer+got,content.size()-got);
+   if(n<0){e=errcode(n);break;}
+   if(n==0 || (size_t)n>content.size()-got){e=EIO;break;}
+   got+=(size_t)n;
+ }
+ if(!e && memcmp(buffer,content.data(),content.size()))e=EIO;
+ if(!e){
+   char extra=0;
+   int64_t n=(int64_t)sceKernelRead(fd,&extra,1);
+   if(n!=0)e=(n<0?errcode(n):EIO);
+ }
+ g_backup_step=e?g_backup_step:"verify-close";
+ int finalClose=close_status(fd);
+ if(!e)e=finalClose;
+ if(!e)g_backup_step="verified";
  return e;
 }
+
 int create_link(const std::string& target,const std::string& path){
  if(!g_authorized)return EAGAIN;
  if(target.empty() || target[0]!='/' || path.empty() || path[0]!='/')return EINVAL;
