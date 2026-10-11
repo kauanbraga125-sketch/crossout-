@@ -17,6 +17,9 @@ static bool valid_title_id(const char* s) {
    if(c>='A'&&c<='Z')letters=true;
    else if(c<'0'||c>'9')return false;
  }
+ if(!strncmp(s,"CUSA",4)){
+   for(int i=4;i<9;i++)if(s[i]<'0'||s[i]>'9')return false;
+ }
  return letters;
 }
 static int scan_dir(const std::string& path,unsigned source,unsigned bit,
