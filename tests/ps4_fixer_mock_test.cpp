@@ -144,6 +144,30 @@ int main(){
  fail_internal_data=true;fail_usb_backups=true;
  check(!fix_repair("",id,FIX_GAME,&result,nullptr) && links[in]==disk(0,id) && changes==0,
        "no writable /data or USB1 backup means no mutation");
+ // v1.2: FPKGi is a PS4 app with a normal 9-character title ID,
+ // but it does NOT use the CUSA game prefix. It must be treated safely.
+ const std::string appid="FPKGI0001",appLink=base(appid);
+ check(fix_valid_id(appid),"accept homebrew title ID FPKGI0001");
+ check(fix_valid_id("APOLLO001"),"accept other valid homebrew title ID");
+ check(!fix_valid_id("FPKG/0001"),"block slash injection for homebrew IDs");
+ check(!fix_valid_id("fpkgi0001"),"reject lowercase/inconsistent IDs");
+ reset();usbfix_io::set_authorized(true);
+ links[appLink]=disk(0,appid);files.insert(disk(1,appid));
+ check(fix_inspect("",appid,FIX_GAME).status==FIX_CANDIDATE,
+       "discover broken FPKGi symlink on USB1");
+ check(fix_repair("",appid,FIX_GAME,&result,nullptr),
+       "repair uniquely matched FPKGi app safely with backup");
+ check(links[appLink]==disk(1,appid) && backups.size()==1,
+       "homebrew repair verifies USB1 link and creates recovery record");
+ reset();usbfix_io::set_authorized(true);
+ links[appLink]=disk(0,appid);files.insert(disk(0,appid));
+ check(fix_inspect("",appid,FIX_GAME).status==FIX_OK &&
+       !fix_repair("",appid,FIX_GAME,&result,nullptr)&&changes==0,
+       "never modify functioning homebrew on USB0");
+ reset();usbfix_io::set_authorized(true);
+ files.insert(appLink);
+ check(fix_inspect("",appid,FIX_GAME).status==FIX_LOCAL,
+       "installed internal homebrew app stays local and untouched");
  printf("PS4 BACKEND RESULT: %d passes, %d failures\n",passes,failures);
  return failures?1:0;
 }
