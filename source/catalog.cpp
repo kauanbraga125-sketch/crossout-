@@ -7,10 +7,17 @@
 #include "native_catalog.h"
 #endif
 
-static bool valid_cusa(const char* s) {
- if(!s || strlen(s)!=9 || strncmp(s,"CUSA",4))return false;
- for(int i=4;i<9;i++)if(s[i]<'0'||s[i]>'9')return false;
- return true;
+// A PS4 title ID is nine uppercase ASCII alphanumeric characters; homebrew
+// names such as FPKGI0001, ITEM00001, etc. do not have a CUSA prefix.
+static bool valid_title_id(const char* s) {
+ if(!s || strlen(s)!=9)return false;
+ bool letters=false;
+ for(int i=0;i<9;i++){
+   const char c=s[i];
+   if(c>='A'&&c<='Z')letters=true;
+   else if(c<'0'||c>'9')return false;
+ }
+ return letters;
 }
 static int scan_dir(const std::string& path,unsigned source,unsigned bit,
                     std::vector<CatalogItem>* games) {
@@ -21,14 +28,14 @@ static int scan_dir(const std::string& path,unsigned source,unsigned bit,
   const int error=usbfix_native_list_directory(path,names);
   if(error)return error;
   for(const std::string& name:names){
-    if(!valid_cusa(name.c_str()))continue;
+    if(!valid_title_id(name.c_str()))continue;
 #else
   DIR* d=opendir(path.c_str());
   if(!d)return -errno;
   struct dirent* ent;
   while((ent=readdir(d))!=NULL){
     const std::string name=ent->d_name;
-    if(!valid_cusa(name.c_str()))continue;
+    if(!valid_title_id(name.c_str()))continue;
 #endif
     seen++;
     bool found=false;
